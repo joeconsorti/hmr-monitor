@@ -1,0 +1,33 @@
+name: Build BTC Cycle Monitor
+
+on:
+  schedule:
+    - cron: '15 13 * * *'      # 13:15 UTC daily (~9:15 AM ET)
+  workflow_dispatch:            # manual run button
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Build monitor.json
+        run: python build_monitor.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "hmr-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add monitor.json
+          git diff --staged --quiet || git commit -m "data: $(date -u +%Y-%m-%d)"
+          git push
