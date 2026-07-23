@@ -56,7 +56,14 @@
          display:flex;align-items:center;gap:9px}
   h2.sec:before{content:"";width:5px;height:5px;background:var(--orange);border-radius:1px;flex:none}
   h2.sec small{color:var(--mut3);letter-spacing:0;font-size:10px;margin-left:2px}
-  .tog{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .tog{display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .tog#pricetog,.tog#levtog{margin-left:auto}
+  .ranges{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 9px}
+  .ranges button{background:var(--panel);border:1px solid var(--line);color:var(--mut2);
+                 font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:4px 10px;
+                 border-radius:4px;cursor:pointer}
+  .ranges button.on{background:var(--tealbg);border-color:var(--tealbd);color:var(--teal2)}
+  .ranges button:not(.on):hover{color:var(--txt2);border-color:var(--mut3)}
   .tog button{background:none;border:none;color:var(--mut3);font-family:var(--mono);font-size:8.5px;
               letter-spacing:1px;padding:4px 11px;cursor:pointer}
   .tog button.on{background:var(--orange);color:#0d1117;font-weight:600}
@@ -245,7 +252,11 @@
       <span class="tog" id="pricetog">
         <button class="on" data-m="hist">HISTORICAL</button><button data-m="flat">CURRENT LEVELS</button>
       </span>
+      <span class="tog" id="pricescale">
+        <button class="on" data-s="linear">LIN</button><button data-s="logarithmic">LOG</button>
+      </span>
     </h2>
+    <div class="ranges" id="pricerange"></div>
     <div id="pricechart" class="lwchart"></div>
     <div class="leg" id="pricelegend"></div>
 
@@ -284,7 +295,11 @@
       <span class="tog" id="levtog">
         <button class="on" data-m="hist">HISTORICAL</button><button data-m="flat">CURRENT LEVELS</button>
       </span>
+      <span class="tog" id="levscale">
+        <button class="on" data-s="linear">LIN</button><button data-s="logarithmic">LOG</button>
+      </span>
     </h2>
+    <div class="ranges" id="levrange"></div>
     <div id="levchart" class="lwchart" style="height:420px"></div>
     <div class="leg" id="levlegend"></div>
     <h2 class="sec">THE LEVELS</h2>
@@ -383,6 +398,63 @@ function indicatorMiniChart(el, o){
 
 /* mode: 'hist' = real historical model curves, 'flat' = current level lines */
 let PRICE_MODE='hist', LEV_MODE='hist';
+let PRICE_SCALE='linear', LEV_SCALE='linear';
+let PRICE_RANGE='3Y', LEV_RANGE='3Y';
+
+/* Range options, in days. ALL clamps to the earliest datapoint available, so a
+   chart never renders empty space to the left of where the data begins. */
+const RANGES=[['1W',7],['1M',30],['3M',91],['6M',182],['1Y',365],
+              ['3Y',1095],['5Y',1825],['10Y',3650],['ALL',null]];
+
+function dayStr(d){ return d.toISOString().slice(0,10); }
+
+/* Visible window for a range key, clamped to the data's own span.
+   Returns {from,to} as 'YYYY-MM-DD', or null to show everything. */
+function rangeWindow(points, key){
+  if(!points||!points.length) return null;
+  const first=points[0].t, last=points[points.length-1].t;
+  const opt=RANGES.find(r=>r[0]===key);
+  if(!opt||opt[1]==null) return {from:first,to:last};
+  const end=new Date(last+'T00:00:00Z');
+  const start=new Date(end.getTime()-opt[1]*86400000);
+  const from=dayStr(start);
+  // never scroll past the earliest real datapoint
+  return {from: from<first?first:from, to:last};
+}
+
+/* Ranges of 1Y or shorter use the true-daily tail; longer ranges use the
+   downsampled full history. Keeps short windows at daily resolution. */
+const DAILY_RANGES={'1W':1,'1M':1,'3M':1,'6M':1,'1Y':1};
+function seriesFor(obj, key){
+  if(!obj) return [];
+  if(DAILY_RANGES[key] && obj.points_daily && obj.points_daily.length) return obj.points_daily;
+  return obj.points || [];
+}
+function priceSeriesFor(key){
+  if(DAILY_RANGES[key] && DATA.price_series_daily && DATA.price_series_daily.length)
+    return DATA.price_series_daily;
+  return DATA.price_series_dated || [];
+}
+
+function applyRange(chart, points, key){
+  const w=rangeWindow(points,key);
+  if(!w){ chart.timeScale().fitContent(); return; }
+  try{ chart.timeScale().setVisibleRange({from:w.from,to:w.to}); }
+  catch(e){ chart.timeScale().fitContent(); }
+}
+
+function buildRangeBar(sel, current, onPick){
+  const box=$(sel); if(!box) return;
+  box.innerHTML=RANGES.map(r=>
+    '<button data-r="'+r[0]+'"'+(r[0]===current?' class="on"':'')+'>'+r[0]+'</button>').join('');
+  box.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      onPick(b.dataset.r);
+    });
+  });
+}
 
 const COSTBASIS=[
   ['sma_350d','350d MA','#2dd4bf'],
@@ -395,21 +467,25 @@ function priceChart(){
   const el=$('#pricechart'); if(!el||!DATA.price_series_dated) return;
   const lv=DATA.levels, ls=DATA.level_series||{};
   const c=makeChart(el, 340);
+  c.applyOptions({rightPriceScale:{borderColor:'#1c2530',
+    mode: PRICE_SCALE==='logarithmic' ? 1 : 0}});
+  const pxPts=priceSeriesFor(PRICE_RANGE);
   const price=c.addLineSeries({color:'#e6edf3',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
-  price.setData(toLine(DATA.price_series_dated));
+  price.setData(toLine(pxPts));
   const leg=[];
   COSTBASIS.forEach(function(row){
     const key=row[0], label=row[1], col=row[2];
-    if(PRICE_MODE==='hist' && ls[key] && ls[key].points && ls[key].points.length){
+    const mp=seriesFor(ls[key], PRICE_RANGE);
+    if(PRICE_MODE==='hist' && mp.length){
       const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
-      s2.setData(toLine(ls[key].points));
+      s2.setData(toLine(mp));
     } else if(lv[key]!=null){
       price.createPriceLine({price:lv[key],color:col,lineWidth:1,lineStyle:2,
                              axisLabelVisible:true,title:label});
     }
     leg.push('<span><i style="background:'+col+'"></i>'+label+'</span>');
   });
-  c.timeScale().fitContent();
+  applyRange(c, pxPts, PRICE_RANGE);
   $('#pricelegend').innerHTML='<span><i style="background:#e6edf3"></i>BTC spot</span>'+leg.join('');
 }
 
@@ -452,21 +528,25 @@ function levelsChart(){
   const el=$('#levchart'); const ls=DATA.level_series; if(!el||!ls) return;
   const lv=DATA.levels;
   const c=makeChart(el, 420);
+  c.applyOptions({rightPriceScale:{borderColor:'#1c2530',
+    mode: LEV_SCALE==='logarithmic' ? 1 : 0}});
   const colors={vaulted:'#8b7fd4',sma_350d:'#2dd4bf',true_market_mean:'#5aa9e6',
                 sth_realized:'#e0a838',realized:'#9aa4b0',lth_realized:'#e0873a',price:'#e6edf3'};
   const order=['price','vaulted','sma_350d','true_market_mean','realized','sth_realized','lth_realized'];
   const leg=[];
   // price always draws as a real series so the axis has a time span in both modes
+  const lpPts=seriesFor(ls.price, LEV_RANGE);
   if(ls.price){
     const ps=c.addLineSeries({color:colors.price,lineWidth:2,priceLineVisible:false,lastValueVisible:true});
-    ps.setData(toLine(ls.price.points));
+    ps.setData(toLine(lpPts));
     leg.push('<span><i style="background:'+colors.price+'"></i>'+ls.price.label+'</span>');
     order.forEach(function(k){
       if(k==='price'||!ls[k]) return;
       const col=colors[k]||'#9aa4b0';
-      if(LEV_MODE==='hist'){
+      const kp=seriesFor(ls[k], LEV_RANGE);
+      if(LEV_MODE==='hist' && kp.length){
         const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
-        s2.setData(toLine(ls[k].points));
+        s2.setData(toLine(kp));
       } else if(lv[k]!=null){
         ps.createPriceLine({price:lv[k],color:col,lineWidth:1,lineStyle:2,
                             axisLabelVisible:true,title:ls[k].label});
@@ -474,7 +554,7 @@ function levelsChart(){
       leg.push('<span><i style="background:'+col+'"></i>'+ls[k].label+'</span>');
     });
   }
-  c.timeScale().fitContent();
+  applyRange(c, lpPts, LEV_RANGE);
   $('#levlegend').innerHTML=leg.join('');
 }
 
@@ -539,7 +619,7 @@ function renderVideos(){
     return '<a class="vid" href="'+v.url+'" target="_blank" rel="noopener">'+
       '<div class="th" style="background-image:url('+v.thumb+')"></div>'+
       '<p>'+v.title+'</p>'+
-      '<div class="vdate">'+v.published+'</div>'+
+      '<div class="vdate">'+(v.published||'')+(v.seconds?' \u00b7 '+Math.round(v.seconds/60)+' MIN':'')+'</div>'+
     '</a>';
   }).join('');
 }
@@ -615,6 +695,13 @@ function renderAll(){
   $('#macro-rates').innerHTML=['us2y','us10y','us30y'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
 
   levelsTable(); levelsChart(); watchTable(); renderVideos();
+
+  buildRangeBar('#pricerange', PRICE_RANGE, function(r){
+    PRICE_RANGE=r; rebuild('#pricechart', priceChart);
+  });
+  buildRangeBar('#levrange', LEV_RANGE, function(r){
+    LEV_RANGE=r; rebuild('#levchart', levelsChart);
+  });
 
   $('#foot').textContent='Data via '+(DATA.source||'BRK + FRED');
   $('#stamp').innerHTML='<span class="livedot"></span>LIVE \u00b7 UPDATED '+((DATA.updated||'').replace('T',' ').replace('Z',' UTC'));
@@ -725,10 +812,20 @@ function bindTog(sel, apply){
     b.addEventListener('click', function(){
       box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
-      apply(b.dataset.m);
+      apply(b.dataset.m || b.dataset.s);
     });
   });
 }
+function rebuild(elSel, fn){
+  const el=$(elSel);
+  for(let i=charts.length-1;i>=0;i--){
+    if(charts[i].el===el){ try{charts[i].c.remove();}catch(e){} charts.splice(i,1); }
+  }
+  fn();
+}
+bindTog('#pricescale', function(sc){ PRICE_SCALE=sc; rebuild('#pricechart', priceChart); });
+bindTog('#levscale',  function(sc){ LEV_SCALE=sc;  rebuild('#levchart',  levelsChart); });
+
 bindTog('#pricetog', function(m){
   PRICE_MODE=m;
   const el=$('#pricechart');
