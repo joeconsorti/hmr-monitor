@@ -31,23 +31,23 @@ TIMEOUT = 60
 MACRO = {
     "m2": {
         "fred_id": "M2SL", "label": "US M2 Money Supply", "unit": "B",
-        "read": "The total supply of money in the system. It has never meaningfully contracted, and it is not going to. Every dollar printed is a dollar chasing a fixed 21 million. This is the whole reason bitcoin exists.",
+        "read": "Total money in the system. It never meaningfully contracts. Every new dollar chases a fixed 21 million.",
     },
     "dxy": {
         "fred_id": "DTWEXBGS", "label": "Dollar Index", "unit": "",
-        "read": "The dollar against everything else. A strong dollar drains liquidity out of risk assets and holds bitcoin down. A falling dollar releases that pressure, and bitcoin is the highest-beta expression of it.",
+        "read": "The dollar against everything else. Strong dollar drains liquidity. Falling dollar releases it, and bitcoin runs.",
     },
     "us10y": {
         "fred_id": "DGS10", "label": "US 10-Year Yield", "unit": "%",
-        "read": "The price of money for the entire world. Rising yields mean tighter conditions and pressure on every asset priced off duration. Falling yields mean the Fed is losing control of the cost of debt, which historically ends one way.",
+        "read": "The price of money for the world. Rising yields tighten everything. Falling yields mean the Fed is losing control.",
     },
     "us2y": {
         "fred_id": "DGS2", "label": "US 2-Year Yield", "unit": "%",
-        "read": "The market's read on where the Fed is going next. When it falls below the funds rate, the market is pricing cuts before the Fed admits them.",
+        "read": "The market's read on the Fed's next move. Below the funds rate, it is pricing cuts the Fed hasn't admitted.",
     },
     "us30y": {
         "fred_id": "DGS30", "label": "US 30-Year Yield", "unit": "%",
-        "read": "The long end is where fiscal credibility gets priced. A rising 30-year while the Fed cuts is the bond market saying it does not believe the story.",
+        "read": "Where fiscal credibility gets priced. A rising 30-year while the Fed cuts is the bond market calling the bluff.",
     },
 }
 
@@ -63,18 +63,28 @@ MACRO = {
 INDICATORS = {
     "mvrv": {
         "series": "mvrv", "label": "MVRV", "direction": "high_is_top",
-        "weight": 1.5, "page": "onchain", "group": "profitability",
-        "read": "Market value against what everyone actually paid. Above 3 means the average holder is sitting on huge unrealized gains and the market is top-heavy. Near 1 means the average holder is roughly breakeven, and that is where every cycle bottom has been built.",
+        "weight": 1.5, "page": "onchain", "group": "profitability", "featured": True,
+        "read": "Price against what the average holder paid. Above 3 is top-heavy. Near 1 is where bottoms are built.",
+    },
+    "sth_mvrv": {
+        "series": "sth_mvrv", "label": "STH MVRV", "direction": "high_is_top",
+        "weight": 1.0, "page": "onchain", "group": "profitability", "featured": True,
+        "read": "Same ratio, recent buyers only. Below 1 means the last five months of demand is underwater.",
+    },
+    "lth_mvrv": {
+        "series": "lth_mvrv", "label": "LTH MVRV", "direction": "high_is_top",
+        "weight": 1.0, "page": "onchain", "group": "profitability",
+        "read": "Same ratio, long-term holders only. Extreme highs are when old money starts distributing.",
     },
     "nupl": {
         "series": "nupl", "label": "NUPL", "direction": "high_is_top",
         "weight": 1.5, "page": "onchain", "group": "profitability",
-        "read": "How much unrealized profit is sitting in the network right now. Above 0.75 is euphoria and it never lasts. Below zero means the average coin is underwater, which is the definition of capitulation.",
+        "read": "Unrealized profit in the network. Above 0.75 is euphoria. Below zero is capitulation.",
     },
     "supply_in_profit": {
         "series": "supply_in_profit_share", "label": "Supply in Profit", "direction": "high_is_top",
         "weight": 1.0, "page": "onchain", "group": "profitability", "unit": "%",
-        "read": "The share of all bitcoin currently worth more than the price it last moved at. When this drops under 60%, four out of every ten coins are underwater. That is when weak hands finish selling.",
+        "read": "Share of coins worth more than their last move price. Under 60% is where weak hands finish selling.",
     },
     # Drawdown is DISPLAY-ONLY (weight 0). Percentile-ranking a drawdown does not
     # map cleanly onto cycle position — the asset spends most of its life well off
@@ -87,12 +97,12 @@ INDICATORS = {
     "reserve_risk": {
         "series": "reserve_risk", "label": "Reserve Risk", "direction": "high_is_top",
         "weight": 1.5, "page": "onchain", "group": "cohort",
-        "read": "Confidence of long-term holders against the price you pay to bet alongside them. Low readings mean conviction is high and price is low, which is the best risk-reward setup that exists in this asset.",
+        "read": "Holder conviction against the price to bet alongside it. Low is the best risk-reward this asset offers.",
     },
     "rhodl": {
         "series": "rhodl_ratio", "label": "RHODL Ratio", "direction": "high_is_top",
         "weight": 1.0, "page": "onchain", "group": "cohort",
-        "read": "Compares what new money is doing against what old money is doing. Spikes mark tops, when new buyers are piling in at the worst possible moment. Low readings mean the tourists have left.",
+        "read": "New money versus old money. Spikes mark tops. Low readings mean the tourists have left.",
     },
     # Liveliness is DISPLAY-ONLY (weight 0). It trends structurally upward over
     # time, so a percentile rank against its own history always reads near the
@@ -100,32 +110,47 @@ INDICATORS = {
     "liveliness": {
         "series": "liveliness", "label": "Liveliness", "direction": "high_is_top",
         "weight": 0.0, "page": "onchain", "group": "cohort", "display_only": True,
-        "read": "How much of the network's coin-days are being spent versus held. Rising means old coins are moving and holders are distributing. Falling means the supply is going dormant and getting locked up.",
+        "read": "Coin-days spent versus held. Rising means holders are distributing. Falling means supply is locking up.",
     },
     "sell_side_risk": {
         "series": "sell_side_risk_ratio_1y", "label": "Sell-Side Risk", "direction": "high_is_top",
         "weight": 0.5, "page": "onchain", "group": "cohort",
-        "read": "How much profit and loss is actually being realized against the size of the market. Low readings mean nobody is transacting, which is what an exhausted market looks like right before it turns.",
+        "read": "Realized profit and loss against market size. Low means an exhausted market, right before it turns.",
     },
     "lth_nupl": {
         "series": "lth_nupl", "label": "LTH NUPL", "direction": "high_is_top",
         "weight": 1.0, "page": "onchain", "group": "cohort",
-        "read": "Unrealized profit held by long-term holders. These are the people who decide when a cycle actually ends. When their profit gets extreme, distribution follows.",
+        "read": "Unrealized profit of long-term holders. When it gets extreme, distribution follows.",
     },
     "sth_nupl": {
         "series": "sth_nupl", "label": "STH NUPL", "direction": "high_is_top",
         "weight": 0.5, "page": "onchain", "group": "cohort",
-        "read": "Unrealized profit held by recent buyers. Negative means everyone who bought in the last five months is underwater, and their pain is what creates the capitulation wick.",
+        "read": "Unrealized profit of recent buyers. Negative means the last five months of demand is underwater.",
+    },
+    "sopr": {
+        "series": "sopr_24h", "label": "SOPR", "direction": "high_is_top",
+        "weight": 0.5, "page": "onchain", "group": "cohort",
+        "read": "Are coins moving at a profit or a loss. Below 1 means the market is selling underwater, a capitulation tell.",
+    },
+    "sth_sopr": {
+        "series": "sth_sopr_24h", "label": "STH SOPR", "direction": "high_is_top",
+        "weight": 0.5, "page": "onchain", "group": "cohort",
+        "read": "Same, recent buyers only. Persistent sub-1 readings are where short-term pain bottoms out.",
+    },
+    "lth_sopr": {
+        "series": "lth_sopr_24h", "label": "LTH SOPR", "direction": "high_is_top",
+        "weight": 0.5, "page": "onchain", "group": "cohort",
+        "read": "Same, long-term holders only. Spikes mark old coins taking profit into strength.",
     },
     "puell": {
         "series": "puell_multiple", "label": "Puell Multiple", "direction": "high_is_top",
         "weight": 1.5, "page": "mining", "group": "stress",
-        "read": "Miner revenue against its own yearly average. Miners are the only structural sellers in this market. When their revenue compresses below 1.0, forced selling dries up, and that has marked the low of every single cycle.",
+        "read": "Miner revenue against its yearly average. Below 1.0, forced selling dries up. That marks every cycle low.",
     },
     "thermocap": {
         "series": "thermo_cap_multiple", "label": "Thermocap Multiple", "direction": "high_is_top",
         "weight": 0.5, "page": "mining", "group": "stress",
-        "read": "Price against every dollar ever paid to secure the network. It is the most conservative valuation model that exists for bitcoin, and it tells you whether the market is paying a reasonable multiple on the security budget.",
+        "read": "Price against every dollar ever spent to secure the network. The most conservative valuation bitcoin has.",
     },
 }
 
@@ -221,6 +246,38 @@ def fetch_series(name, days=HISTORY_DAYS):
         return None
 
 
+def fetch_dates(days=HISTORY_DAYS):
+    """Fetch the BRK date index aligned to the daily series (ISO date strings)."""
+    url = f"{BRK}/series/date/date/data"
+    try:
+        r = requests.get(url, params={"from": -days}, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"  ! dates: {e}", file=sys.stderr)
+        return None
+
+
+def dated_downsample(dates, values, target=200):
+    """Zip dates+values (tail-aligned), drop Nones, downsample to ~target points.
+    Returns list of {t: 'YYYY-MM-DD', v: float} for Lightweight Charts."""
+    if not dates or not values:
+        return []
+    # align on the shorter tail
+    n = min(len(dates), len(values))
+    ds, vs = dates[-n:], values[-n:]
+    pairs = [(d, v) for d, v in zip(ds, vs) if isinstance(v, (int, float))]
+    if not pairs:
+        return []
+    step = max(1, len(pairs) // target)
+    out = [{"t": d, "v": round(v, 6)} for d, v in pairs[::step]]
+    # always include the final point
+    if out and out[-1]["t"] != pairs[-1][0]:
+        d, v = pairs[-1]
+        out.append({"t": d, "v": round(v, 6)})
+    return out
+
+
 def percentile_rank(value, history):
     """What % of historical values sit below `value`. Returns 0-100."""
     clean = [v for v in history if isinstance(v, (int, float))]
@@ -228,6 +285,25 @@ def percentile_rank(value, history):
         return None
     below = sum(1 for v in clean if v < value)
     return round(100.0 * below / len(clean), 1)
+
+
+def quantiles(history, n=201):
+    """Return an n-point sorted quantile array of `history`, from the 0th to the
+    100th percentile. The browser ranks a live value against this array to
+    reproduce the exact percentile this script computes, without shipping the
+    full multi-thousand-point series. 201 points = 0.5% resolution."""
+    clean = sorted(v for v in history if isinstance(v, (int, float)))
+    if not clean:
+        return None
+    m = len(clean)
+    out = []
+    for i in range(n):
+        pos = i / (n - 1) * (m - 1)
+        lo = int(pos)
+        hi = min(lo + 1, m - 1)
+        frac = pos - lo
+        out.append(clean[lo] + (clean[hi] - clean[lo]) * frac)
+    return [round(v, 8) for v in out]
 
 
 def to_score(value, history, direction):
@@ -252,6 +328,11 @@ def build():
         "history_window_days": HISTORY_DAYS,
     }
 
+    # ---- date index (aligns every series to ISO dates for charts) ---------
+    print("Fetching date index...")
+    all_dates = fetch_dates() or []
+    print(f"  ok date index {len(all_dates)} pts")
+
     # ---- fetch every indicator series -------------------------------------
     print("Fetching indicator series...")
     raw = {}
@@ -262,10 +343,13 @@ def build():
             print(f"  ok {cfg['series']:28} {len(data)} pts")
 
     # ---- fetch price levels ------------------------------------------------
+    # 730 days of history so the Levels tab can plot real cost-basis model lines
+    # over time (TradingView Lightweight Charts), not just a snapshot.
     print("Fetching price levels...")
+    LEVEL_DAYS = 730
     levels_raw = {}
     for key, series in LEVELS.items():
-        data = fetch_series(series, days=400)
+        data = fetch_series(series, days=LEVEL_DAYS)
         if data:
             levels_raw[key] = data
             print(f"  ok {series:28} {len(data)} pts")
@@ -302,9 +386,10 @@ def build():
             weighted_sum += score * w
             weight_total += w
 
-        # downsample for sparkline
-        step = max(1, len(clean) // SPARKLINE_POINTS)
-        spark = clean[::step][-SPARKLINE_POINTS:]
+        # dated series for this indicator's own chart (chart-per-indicator on
+        # the On-Chain and Mining pages, and the sparkline on every card).
+        # ~3 years, ~120 points. This supersedes the old flat sparkline array.
+        chart = dated_downsample(all_dates, series[-1100:], target=120)
 
         indicators[key] = {
             "label": cfg["label"],
@@ -317,7 +402,8 @@ def build():
             "page": cfg["page"],
             "group": cfg["group"],
             "read": cfg["read"],
-            "sparkline": [round(v, 6) for v in spark],
+            "featured": cfg.get("featured", False),
+            "chart": chart,
         }
 
     composite = round(weighted_sum / weight_total) if weight_total else 50
@@ -369,7 +455,6 @@ def build():
 
     out["indicators"] = indicators
 
-
     # ---- levels ------------------------------------------------------------
     levels = {}
     for key, data in levels_raw.items():
@@ -394,11 +479,24 @@ def build():
     out["levels"] = levels
     out["levels_table"] = levels_table
 
-    # ---- price chart series for the hero -----------------------------------
+    # ---- dated level series (Levels tab, real TradingView chart) ----------
+    # Price as a line plus each cost-basis model as its own line, all over the
+    # same 2-year date axis. ~220 points each keeps the payload small.
+    level_series = {}
+    for key, data in levels_raw.items():
+        ser = dated_downsample(all_dates, data, target=220)
+        if ser:
+            label, meaning = LEVEL_META.get(key, (key, ""))
+            level_series[key] = {"label": label, "points": ser}
+    out["level_series"] = level_series
+
+    # ---- price chart series for the hero (dated, for the monitor page) -----
     if "price" in levels_raw:
         pr = [v for v in levels_raw["price"] if isinstance(v, (int, float))]
         step = max(1, len(pr) // 120)
         out["price_series"] = [round(v, 2) for v in pr[::step]]
+        # dated version for the monitor price chart
+        out["price_series_dated"] = dated_downsample(all_dates, levels_raw["price"], target=180)
 
     # ---- cycle clock -------------------------------------------------------
     if "price" in levels_raw:
@@ -419,7 +517,8 @@ def build():
         fng_now = fng_hist[-1]
         fng_pct = percentile_rank(fng_now, fng_hist)
         prev = fng_hist[-31] if len(fng_hist) > 31 else fng_hist[0]
-        step = max(1, len(fng_hist) // SPARKLINE_POINTS)
+        # F&G has its own (shorter) date axis; align to the tail of the index.
+        fng_chart = dated_downsample(all_dates, fng_hist, target=120)
         indicators["fear_greed"] = {
             "label": "Fear & Greed",
             "value": fng_now,
@@ -431,8 +530,8 @@ def build():
             "page": "monitor",
             "group": "sentiment",
             "classification": fng_class,
-            "read": "Crowd sentiment in a single number. Extreme fear is where the best entries have historically been made, and extreme greed is where the worst ones are. It is a contrarian gauge, not a directional one.",
-            "sparkline": fng_hist[::step][-SPARKLINE_POINTS:],
+            "read": "Crowd sentiment in one number. Extreme fear is where the best entries are made. A contrarian gauge.",
+            "chart": fng_chart,
         }
         # fold into the composite
         weighted_sum += fng_pct * 1.0
@@ -484,6 +583,49 @@ def build():
             watchlist.append({"ticker": tick, "price": m["value"],
                               "d30": m["chg_30d"], "ytd": m["chg_ytd"]})
     out["watchlist"] = watchlist
+
+    # ---- distributions + live_series (browser-side live recompute) --------
+    # The dashboard polls BRK directly every 5 minutes, takes the latest value
+    # of each series, and ranks it against the quantile array below to rebuild
+    # the exact percentile + composite this script produces. FRED is CORS-blocked
+    # so macro stays on the daily Action; everything here is CORS-open on BRK.
+    # This block runs AFTER Fear & Greed is folded into `indicators` so the
+    # sentiment leg is included in the live composite exactly as scored here.
+    print("Building distributions for live recompute...")
+    distributions = {}
+    live_series = {}
+    for key, cfg in INDICATORS.items():
+        if key not in raw or key not in indicators:
+            continue
+        clean = [v for v in raw[key] if isinstance(v, (int, float))]
+        q = quantiles(clean)
+        if not q:
+            continue
+        distributions[key] = {
+            "q": q,
+            "direction": cfg["direction"],
+            "weight": cfg.get("weight", 1.0),
+            "unit": cfg.get("unit", ""),
+        }
+        live_series[key] = cfg["series"]
+
+    # Fear & Greed distribution (scored; alternative.me is also CORS-open).
+    if "fear_greed" in indicators and fng_hist:
+        q = quantiles(fng_hist)
+        if q:
+            distributions["fear_greed"] = {
+                "q": q, "direction": "high_is_top",
+                "weight": indicators["fear_greed"]["weight"], "unit": "",
+            }
+
+    out["distributions"] = distributions
+    out["live_series"] = live_series
+    out["live_levels"] = dict(LEVELS)
+    out["live_endpoints"] = {
+        "brk_series": BRK + "/series/{name}/date/data?from=-1",
+        "brk_price": BRK + "/series/price/date/data?from=-1",
+        "fng": "https://api.alternative.me/fng/?limit=1",
+    }
 
     return out
 
