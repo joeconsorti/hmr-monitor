@@ -9,11 +9,27 @@ normalizes each indicator to a 0-100 percentile against its own full history,
 computes a weighted composite cycle score, and writes `monitor.json`.
 
 The GitHub Action runs it daily and commits the result. The dashboard front end
-reads `monitor.json` directly — no database, no server, no cost.
+reads `monitor.json` on load — no database, no server, no cost.
 
-## Scored indicators (11)
-MVRV · NUPL · Supply in Profit · Reserve Risk · RHODL · Sell-Side Risk ·
-LTH NUPL · STH NUPL · Puell Multiple · Thermocap Multiple · Fear & Greed
+**The dashboard is live.** On top of the daily base file, the front end polls
+the same free BRK and alternative.me endpoints directly from the browser (both
+send `Access-Control-Allow-Origin: *`):
+
+- **Every 60 seconds** it refreshes the BTC price, the ticker tape, and the
+  vs-spot deltas in the levels table.
+- **Every 5 minutes** it re-fetches the latest value of all 17 on-chain series
+  plus Fear & Greed, re-ranks each against the quantile distribution shipped in
+  `monitor.json` (`distributions`), and rebuilds the composite score, regime,
+  and verdict — no commit, no server round-trip. The browser reproduces the
+  exact percentile math `build_monitor.py` uses, to within the 201-point
+  quantile resolution.
+
+Macro (FRED) stays on the daily Action because FRED does not send CORS headers.
+
+## Scored indicators (16)
+MVRV · STH MVRV · LTH MVRV · NUPL · Supply in Profit · Reserve Risk · RHODL ·
+Sell-Side Risk · LTH NUPL · STH NUPL · SOPR · STH SOPR · LTH SOPR ·
+Puell Multiple · Thermocap Multiple · Fear & Greed
 
 ## Macro (displayed, not scored)
 US M2 · Dollar Index · US 2Y / 10Y / 30Y yields — pulled from FRED's public
@@ -44,9 +60,9 @@ CSV endpoint. **No API key required.**
 ## Files
 | File | What |
 |---|---|
-| `build_monitor.py` | Fetches all data, computes the score, writes `monitor.json` |
-| `monitor.json` | The data payload the dashboard reads (~30 KB) |
-| `index.html` | The five-page dashboard. Self-contained, no dependencies. |
+| `build_monitor.py` | Fetches all data, computes the score, ships quantile distributions + live-series map, writes `monitor.json` |
+| `monitor.json` | The data payload the dashboard reads (~195 KB: adds per-indicator + level chart series and the quantile distributions that power the live recompute) |
+| `index.html` | The five-page live dashboard. TradingView Lightweight Charts (v4.2.3, one CDN script); otherwise self-contained. |
 | `.github/workflows/daily.yml` | Runs the build daily at 13:15 UTC (~9:15 AM ET) |
 | `CNAME` | Custom domain for GitHub Pages |
 
@@ -86,8 +102,11 @@ python3 build_monitor.py && python3 -m http.server 8000
 Then open http://localhost:8000
 
 ## Still to add
-- "What changed today" diff against the previous day's file
-- Alert triggers (score crosses 15/85, price enters bottom zone)
-- Gold / S&P / BTC-GOLD ratio in the watchlist
+- Wire the "Alerts" chips (score crosses 15/85, price enters bottom zone,
+  price reclaims 350d MA) to member email delivery — the UI is in place,
+  labeled Coming Soon.
+- Real YouTube thumbnails/titles in the "Latest from the channel" strip
+  (currently links to the channel).
+- Gold / S&P / BTC-GOLD ratio in the cross-asset watchlist.
 
 Educational only. Not financial advice.
