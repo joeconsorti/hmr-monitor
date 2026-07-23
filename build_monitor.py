@@ -23,10 +23,12 @@ FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 FNG = "https://api.alternative.me/fng/"
 HISTORY_DAYS = 4500          # ~12 years, covers 2 full cycles
 LEVEL_HISTORY_DAYS = 5600    # ~15 years, full depth for cost-basis charts
+DAILY_TAIL = 400             # days kept at true daily resolution for short ranges
 GOLD_URL = ("https://query1.finance.yahoo.com/v8/finance/chart/"
             "GC=F?range=2y&interval=1d")
 YT_CHANNEL_ID = "UCw4_-IVRDtkGZkwUmsv1S2A"
 YT_FEED = "https://www.youtube.com/feeds/videos.xml?channel_id=" + YT_CHANNEL_ID
+YT_VIDEOS_PAGE = "https://www.youtube.com/@JoeConsorti/videos"
 SPARKLINE_POINTS = 60        # points kept per indicator for the UI sparkline
 TIMEOUT = 60
 
@@ -229,32 +231,111 @@ def fetch_gold():
         return []
 
 
-def fetch_videos(n=3):
-    """Latest uploads from the channel's public RSS feed. No API key needed.
-    Returns [{id, title, published, url, thumb}] or [] if unavailable."""
+def _dur_to_seconds(txt):
+    """'22:44' or '1:02:33' -> seconds."""
     try:
-        r = requests.get(YT_FEED, timeout=TIMEOUT,
+        parts = [int(p) for p in txt.split(":")]
+    except ValueError:
+        return None
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return None
+
+
+def _video_seconds(vid):
+    """Runtime of a single video, scraped from its watch page. Fallback only."""
+    try:
+        r = requests.get("https://www.youtube.com/watch?v=" + vid, timeout=TIMEOUT,
                          headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         import re as _re
-        ids = _re.findall(r"<yt:videoId>(.*?)</yt:videoId>", r.text)
-        titles = _re.findall(r"<media:title>(.*?)</media:title>", r.text)
-        pubs = _re.findall(r"<published>(.*?)</published>", r.text)
+        m = _re.search(r'"lengthSeconds":"(\d+)"', r.text)
+        if m:
+            return int(m.group(1))
+    except Exception:
+        pass
+    return None
+
+
+def _lockup_texts(node, acc):
+    """Collect every rendered text string under a YouTube view-model node."""
+    if isinstance(node, dict):
+        c = node.get("content")
+        if isinstance(c, str):
+            acc.append(c)
+        for v in node.values():
+            _lockup_texts(v, acc)
+    elif isinstance(node, list):
+        for v in node:
+            _lockup_texts(v, acc)
+
+
+def fetch_videos(n=3, min_seconds=181):
+    """Latest long-form uploads from the channel's public /videos page.
+
+    Shorts are excluded by runtime: anything <= 3 minutes is dropped. The page
+    lists ~30 uploads with durations, so there is always enough long-form to
+    fill the strip. No API key, one request.
+    Returns [{id, title, published, url, thumb, seconds}] or [].
+    """
+    import re as _re
+    try:
+        r = requests.get(YT_VIDEOS_PAGE, timeout=TIMEOUT,
+                         headers={"User-Agent": "Mozilla/5.0",
+                                  "Accept-Language": "en-US"})
+        r.raise_for_status()
+        html = r.text
+
+        # duration badge sits next to each videoId in the raw payload
+        dmap = {}
+        for vid, dur in _re.findall(
+                r'"videoId":"([\w-]{11})".*?"text":"(\d+:\d+(?::\d+)?)"', html):
+            dmap.setdefault(vid, dur)
+
+        blob = _re.search(r"var ytInitialData = (\{.*?\});</script>", html)
+        if not blob:
+            raise ValueError("ytInitialData not found")
+        data = json.loads(blob.group(1))
+
+        lockups = []
+
+        def walk(o):
+            if isinstance(o, dict):
+                if "lockupViewModel" in o:
+                    lockups.append(o["lockupViewModel"])
+                for v in o.values():
+                    walk(v)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v)
+        walk(data)
+
         rows = []
-        for i in range(len(ids)):
-            t = titles[i] if i < len(titles) else ""
-            t = (t.replace("&amp;", "&").replace("&quot;", '"')
-                  .replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">"))
+        for lk in lockups:
+            vid = lk.get("contentId")
+            dur = dmap.get(vid)
+            if not vid or not dur:
+                continue
+            secs = _dur_to_seconds(dur)
+            if secs is None or secs < min_seconds:
+                continue                      # Short
+            acc = []
+            _lockup_texts(lk.get("metadata", {}), acc)
+            title = acc[0] if acc else ""
+            published = next((a for a in acc if "ago" in a), "")
             rows.append({
-                "id": ids[i],
-                "title": t,
-                "published": pubs[i][:10] if i < len(pubs) else "",
-                "url": "https://www.youtube.com/watch?v=" + ids[i],
-                "thumb": f"https://i.ytimg.com/vi/{ids[i]}/hqdefault.jpg",
+                "id": vid,
+                "title": title,
+                "published": published,       # e.g. "3 days ago"
+                "url": "https://www.youtube.com/watch?v=" + vid,
+                "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                "seconds": secs,
             })
-        # the feed is not always strictly newest-first, so sort by publish date
-        rows.sort(key=lambda r: r["published"], reverse=True)
-        return rows[:n]
+            if len(rows) >= n:
+                break
+        return rows
     except Exception as e:
         print(f"  ! videos: {e}", file=sys.stderr)
         return []
@@ -533,21 +614,28 @@ def build():
     # ---- dated level series (Levels + Monitor cost-basis charts) ----------
     # Price plus each cost-basis model as its own line over the full ~15-year
     # date axis. Powers the HISTORICAL mode of the cost-basis toggle.
+    # Two resolutions per model:
+    #   points       ~430 pts across the full ~15y span (long ranges)
+    #   points_daily  every day for the last ~2y (1W/1M/3M/6M/1Y ranges)
+    # The front end picks whichever fits the selected range so short windows
+    # always render true daily candles instead of a sparse downsample.
     level_series = {}
     for key, data in levels_raw.items():
         ser = dated_downsample(all_dates, data, target=420)
         if ser:
             label, meaning = LEVEL_META.get(key, (key, ""))
-            level_series[key] = {"label": label, "points": ser}
+            daily = dated_downsample(all_dates[-DAILY_TAIL:], data[-DAILY_TAIL:],
+                                     target=DAILY_TAIL)
+            level_series[key] = {"label": label, "points": ser,
+                                 "points_daily": daily}
     out["level_series"] = level_series
 
     # ---- price chart series for the hero (dated, for the monitor page) -----
     if "price" in levels_raw:
-        pr = [v for v in levels_raw["price"] if isinstance(v, (int, float))]
-        step = max(1, len(pr) // 120)
-        out["price_series"] = [round(v, 2) for v in pr[::step]]
-        # dated version for the monitor price chart
+        # dated series for the monitor price chart
         out["price_series_dated"] = dated_downsample(all_dates, levels_raw["price"], target=420)
+        out["price_series_daily"] = dated_downsample(
+            all_dates[-DAILY_TAIL:], levels_raw["price"][-DAILY_TAIL:], target=DAILY_TAIL)
 
     # ---- cycle clock -------------------------------------------------------
     if "price" in levels_raw:
@@ -650,7 +738,8 @@ def build():
     videos = fetch_videos(3)
     out["videos"] = videos
     for v in videos:
-        print(f"  ok {v['published']}  {v['title'][:52]}")
+        mins = v.get("seconds", 0) // 60
+        print(f"  ok {v['published']}  {mins:>3}m  {v['title'][:46]}")
 
     # ---- distributions + live_series (browser-side live recompute) --------
     # The dashboard polls BRK directly every 5 minutes, takes the latest value
