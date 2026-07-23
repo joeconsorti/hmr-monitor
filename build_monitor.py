@@ -22,6 +22,11 @@ BRK = "https://bitview.space/api"
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 FNG = "https://api.alternative.me/fng/"
 HISTORY_DAYS = 4500          # ~12 years, covers 2 full cycles
+LEVEL_HISTORY_DAYS = 5600    # ~15 years, full depth for cost-basis charts
+GOLD_URL = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+            "GC=F?range=2y&interval=1d")
+YT_CHANNEL_ID = "UCw4_-IVRDtkGZkwUmsv1S2A"
+YT_FEED = "https://www.youtube.com/feeds/videos.xml?channel_id=" + YT_CHANNEL_ID
 SPARKLINE_POINTS = 60        # points kept per indicator for the UI sparkline
 TIMEOUT = 60
 
@@ -209,6 +214,52 @@ def fetch_fred(series_id):
         return [], []
 
 
+def fetch_gold():
+    """Spot gold (COMEX front-month) daily closes. Free, no API key.
+    Returns a list of closes, oldest first, or [] if unavailable."""
+    try:
+        r = requests.get(GOLD_URL, timeout=TIMEOUT,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        res = r.json()["chart"]["result"][0]
+        closes = res["indicators"]["quote"][0]["close"]
+        return [c for c in closes if isinstance(c, (int, float))]
+    except Exception as e:
+        print(f"  ! gold: {e}", file=sys.stderr)
+        return []
+
+
+def fetch_videos(n=3):
+    """Latest uploads from the channel's public RSS feed. No API key needed.
+    Returns [{id, title, published, url, thumb}] or [] if unavailable."""
+    try:
+        r = requests.get(YT_FEED, timeout=TIMEOUT,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        import re as _re
+        ids = _re.findall(r"<yt:videoId>(.*?)</yt:videoId>", r.text)
+        titles = _re.findall(r"<media:title>(.*?)</media:title>", r.text)
+        pubs = _re.findall(r"<published>(.*?)</published>", r.text)
+        rows = []
+        for i in range(len(ids)):
+            t = titles[i] if i < len(titles) else ""
+            t = (t.replace("&amp;", "&").replace("&quot;", '"')
+                  .replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">"))
+            rows.append({
+                "id": ids[i],
+                "title": t,
+                "published": pubs[i][:10] if i < len(pubs) else "",
+                "url": "https://www.youtube.com/watch?v=" + ids[i],
+                "thumb": f"https://i.ytimg.com/vi/{ids[i]}/hqdefault.jpg",
+            })
+        # the feed is not always strictly newest-first, so sort by publish date
+        rows.sort(key=lambda r: r["published"], reverse=True)
+        return rows[:n]
+    except Exception as e:
+        print(f"  ! videos: {e}", file=sys.stderr)
+        return []
+
+
 def fetch_fear_greed():
     """Fetch the full Fear & Greed history from alternative.me. No key needed."""
     try:
@@ -330,7 +381,7 @@ def build():
 
     # ---- date index (aligns every series to ISO dates for charts) ---------
     print("Fetching date index...")
-    all_dates = fetch_dates() or []
+    all_dates = fetch_dates(days=LEVEL_HISTORY_DAYS) or []
     print(f"  ok date index {len(all_dates)} pts")
 
     # ---- fetch every indicator series -------------------------------------
@@ -343,10 +394,10 @@ def build():
             print(f"  ok {cfg['series']:28} {len(data)} pts")
 
     # ---- fetch price levels ------------------------------------------------
-    # 730 days of history so the Levels tab can plot real cost-basis model lines
-    # over time (TradingView Lightweight Charts), not just a snapshot.
+    # Full available history (~15 years) so the Levels and Monitor charts can
+    # plot real historical cost-basis curves, not flat snapshot lines.
     print("Fetching price levels...")
-    LEVEL_DAYS = 730
+    LEVEL_DAYS = LEVEL_HISTORY_DAYS
     levels_raw = {}
     for key, series in LEVELS.items():
         data = fetch_series(series, days=LEVEL_DAYS)
@@ -479,12 +530,12 @@ def build():
     out["levels"] = levels
     out["levels_table"] = levels_table
 
-    # ---- dated level series (Levels tab, real TradingView chart) ----------
-    # Price as a line plus each cost-basis model as its own line, all over the
-    # same 2-year date axis. ~220 points each keeps the payload small.
+    # ---- dated level series (Levels + Monitor cost-basis charts) ----------
+    # Price plus each cost-basis model as its own line over the full ~15-year
+    # date axis. Powers the HISTORICAL mode of the cost-basis toggle.
     level_series = {}
     for key, data in levels_raw.items():
-        ser = dated_downsample(all_dates, data, target=220)
+        ser = dated_downsample(all_dates, data, target=420)
         if ser:
             label, meaning = LEVEL_META.get(key, (key, ""))
             level_series[key] = {"label": label, "points": ser}
@@ -496,7 +547,7 @@ def build():
         step = max(1, len(pr) // 120)
         out["price_series"] = [round(v, 2) for v in pr[::step]]
         # dated version for the monitor price chart
-        out["price_series_dated"] = dated_downsample(all_dates, levels_raw["price"], target=180)
+        out["price_series_dated"] = dated_downsample(all_dates, levels_raw["price"], target=420)
 
     # ---- cycle clock -------------------------------------------------------
     if "price" in levels_raw:
@@ -577,12 +628,29 @@ def build():
         watchlist.append({"ticker": "BTC", "price": spot,
                           "d30": pct_change(pr, 30),
                           "ytd": pct_change(pr, 200)})
+    # Gold sits directly under BTC — the comparison the audience actually cares
+    # about. Sourced separately because FRED's LBMA gold series were retired.
+    print("Fetching gold...")
+    gold = fetch_gold()
+    if gold:
+        watchlist.append({"ticker": "GOLD", "price": round(gold[-1], 2),
+                          "d30": pct_change(gold, 21),
+                          "ytd": pct_change(gold, 252)})
+        print(f"  ok GOLD       {round(gold[-1], 2)}")
+
     for key, tick in (("dxy", "DXY"), ("us10y", "US 10Y"), ("us2y", "US 2Y")):
         if key in macro:
             m = macro[key]
             watchlist.append({"ticker": tick, "price": m["value"],
                               "d30": m["chg_30d"], "ytd": m["chg_ytd"]})
     out["watchlist"] = watchlist
+
+    # ---- latest uploads (public RSS, no API key) --------------------------
+    print("Fetching latest videos...")
+    videos = fetch_videos(3)
+    out["videos"] = videos
+    for v in videos:
+        print(f"  ok {v['published']}  {v['title'][:52]}")
 
     # ---- distributions + live_series (browser-side live recompute) --------
     # The dashboard polls BRK directly every 5 minutes, takes the latest value
