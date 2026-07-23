@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTC Cycle Monitor — The Hard Money Room</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#131a22; --line:#1c2530; --line2:#161d26;
+    --txt:#e6edf3; --txt2:#c9d1d9; --mut:#9aa4b0; --mut2:#7d8896; --mut3:#5a636e;
+    --teal:#2dd4bf; --teal2:#3dd6c0; --tealbg:#0f2b28; --tealbd:#164e46;
+    --red:#e2504a; --green:#3fb950; --amber:#e0a838; --orange:#FD6F0B;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 18px 60px}
+
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
+  .hbar{max-width:1180px;margin:0 auto;padding:13px 18px;display:flex;
+        justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;background:var(--teal);border-radius:2px}
+  .brand span{font-size:13px;letter-spacing:2px;font-weight:500}
+  nav{display:flex;gap:16px;flex-wrap:wrap}
+  nav button{background:none;border:none;color:var(--mut3);font-family:var(--mono);
+             font-size:11px;letter-spacing:1px;cursor:pointer;padding:4px 0;
+             border-bottom:2px solid transparent}
+  nav button.on{color:var(--teal);border-bottom-color:var(--teal)}
+  nav button:hover{color:var(--mut)}
+  .stamp{font-size:9px;color:var(--mut3)}
+
+  .changed{background:var(--panel);border-bottom:1px solid var(--line);padding:11px 0}
+  .changed .inner{max-width:1180px;margin:0 auto;padding:0 18px;display:flex;gap:10px;align-items:flex-start}
+  .changed b{color:var(--teal);font-size:9px;letter-spacing:1px;white-space:nowrap;padding-top:2px;font-weight:400}
+  .changed p{margin:0;font-size:11px;color:var(--txt2);line-height:1.55}
+
+  .page{display:none} .page.on{display:block}
+  h2.sec{font-size:10px;letter-spacing:2px;color:var(--mut2);margin:22px 0 10px;font-weight:400}
+  h2.sec small{color:var(--mut3);letter-spacing:0;font-size:10px;margin-left:8px}
+
+  .hero{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:22px 0 6px}
+  .hero .lbl{font-size:10px;letter-spacing:2px;color:var(--mut2);margin-bottom:6px}
+  .big{font-size:58px;font-weight:500;line-height:1}
+  .of{font-size:18px;color:var(--mut2)}
+  .delta{font-size:13px;padding-bottom:7px}
+  .regime{font-size:15px;letter-spacing:2px;margin-top:2px}
+  .verdict{font-size:34px;font-weight:500;letter-spacing:1px;line-height:1;color:var(--teal)}
+  .vsub{color:var(--mut);font-size:11px;margin-top:9px}
+  .quart{color:var(--teal2);font-size:11px;margin-top:6px}
+  .note{color:var(--mut3);font-size:9px;margin-top:4px}
+  .divl{border-left:1px solid var(--line);padding-left:22px}
+
+  .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:13px 0;
+         border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:14px}
+  .strip .k{font-size:9px;letter-spacing:1px;color:var(--mut2)}
+  .strip .v{font-size:16px;margin-top:3px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:11px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .card .nm{color:var(--mut);font-size:10px}
+  .card .pc{font-size:9px}
+  .card .val{font-size:19px;margin:4px 0}
+  .card .rd{color:var(--mut2);font-size:9px;line-height:1.5;margin-top:6px}
+  .card.dim{opacity:.72}
+  .badge{font-size:8px;letter-spacing:.5px;color:var(--mut3);border:1px solid var(--line);
+         border-radius:20px;padding:1px 7px;margin-left:6px}
+
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{color:var(--mut3);font-size:9px;letter-spacing:1px;text-align:right;padding:5px 0;font-weight:400}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 0;border-top:1px solid var(--line2);color:var(--txt2);text-align:right}
+  tr.spot td{background:var(--panel);color:var(--txt);font-weight:500}
+  .mean{text-align:left;color:var(--mut2);padding-left:16px}
+
+  .gauge{display:flex;height:28px;border-radius:5px;overflow:hidden;position:relative;
+         border:1px solid var(--line)}
+  .gauge i{display:block}
+  .mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--teal)}
+  .glabels{display:flex;justify-content:space-between;margin-top:5px;color:var(--mut3);font-size:8px}
+  .glabels .on{color:var(--teal2)}
+
+  .clock{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .clock div{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:8px}
+  .clock .k{color:var(--mut2);font-size:8px}
+  .clock .v{font-size:15px;margin-top:2px}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .chip{background:var(--tealbg);border:1px solid var(--tealbd);color:var(--teal2);
+        font-size:9px;padding:4px 10px;border-radius:20px}
+
+  .vids{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .vid{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .vid .th{height:82px;background:linear-gradient(135deg,#1c2530,#131a22);
+           display:flex;align-items:center;justify-content:center;color:var(--mut3);font-size:9px}
+  .vid p{margin:0;padding:9px;font-size:9px;color:var(--txt2);line-height:1.45}
+
+  footer{text-align:center;padding:16px 0 8px;border-top:1px solid var(--line);margin-top:26px}
+  footer span{color:var(--mut3);font-size:9px;letter-spacing:1px}
+
+  .callout{background:var(--panel);border-left:2px solid var(--teal);padding:12px 14px;
+           border-radius:0 6px 6px 0;margin-top:14px}
+  .callout b{color:var(--teal);font-size:10px;letter-spacing:1px;font-weight:400;display:block;margin-bottom:5px}
+  .callout p{margin:0;color:var(--mut);font-size:11px;line-height:1.6}
+
+  .up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--mut2)}
+  .cool{color:var(--teal)} .warm{color:var(--amber)} .hot{color:var(--red)}
+  .loading{padding:70px 0;text-align:center;color:var(--mut2);font-size:12px}
+
+  @media(max-width:720px){
+    .hero{grid-template-columns:1fr;gap:16px}
+    .divl{border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:16px}
+    .strip{grid-template-columns:repeat(2,1fr)}
+    .vids{grid-template-columns:1fr}
+    .big{font-size:48px}
+    .glabels{font-size:7px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hbar">
+    <div class="brand"><i class="dot"></i><span>BTC CYCLE MONITOR</span></div>
+    <nav id="nav">
+      <button class="on" data-p="monitor">MONITOR</button>
+      <button data-p="levels">LEVELS</button>
+      <button data-p="macro">MACRO</button>
+      <button data-p="onchain">ON-CHAIN</button>
+      <button data-p="mining">MINING</button>
+    </nav>
+    <div class="stamp" id="stamp"></div>
+  </div>
+</header>
+
+<div class="changed"><div class="inner">
+  <b>WHAT CHANGED</b><p id="changed">Loading…</p>
+</div></div>
+
+<div class="wrap">
+  <div id="boot" class="loading">Loading monitor data…</div>
+
+  <!-- ================= MONITOR ================= -->
+  <section class="page on" id="p-monitor" style="display:none">
+    <div class="hero">
+      <div>
+        <div class="lbl">COMPOSITE CYCLE SCORE</div>
+        <div style="display:flex;align-items:baseline;gap:9px">
+          <span class="big" id="score">–</span><span class="of">/100</span>
+          <span class="delta" id="delta"></span>
+        </div>
+        <div class="regime" id="regime"></div>
+        <div class="note" id="lookback"></div>
+      </div>
+      <div class="divl">
+        <div class="lbl">VERDICT</div>
+        <div class="verdict" id="verdict"></div>
+        <div class="vsub">Macro and on-chain, fused into one signal.</div>
+        <div class="quart" id="quart"></div>
+      </div>
+    </div>
+
+    <h2 class="sec">SCORE HISTORY <small>every top and bottom this framework has seen</small></h2>
+    <div id="histchart"></div>
+    <div class="note" id="histnote"></div>
+
+    <h2 class="sec">BTC PRICE · ZONES SHADED</h2>
+    <div id="pricechart"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:20px" id="gaugeclock">
+      <div>
+        <h2 class="sec" style="margin-top:0">CYCLE POSITION</h2>
+        <div class="gauge">
+          <i style="flex:15;background:#0f2b28"></i><i style="flex:20;background:#123631"></i>
+          <i style="flex:30;background:#1c1f26"></i><i style="flex:20;background:#2a1f16"></i>
+          <i style="flex:15;background:#3a1a12"></i>
+          <div class="mark" id="mark"></div>
+        </div>
+        <div class="glabels" id="glabels">
+          <span>BOTTOM/HARD BUY</span><span>ACCUM</span><span>MID</span>
+          <span>EUPHORIA</span><span>TOP/HARD SELL</span>
+        </div>
+      </div>
+      <div>
+        <h2 class="sec" style="margin-top:0">CYCLE CLOCK</h2>
+        <div class="clock" id="clock"></div>
+        <div class="note" id="clocknote"></div>
+      </div>
+    </div>
+
+    <div class="strip" id="strip"></div>
+
+    <h2 class="sec">CROSS-ASSET</h2>
+    <table id="watch"></table>
+
+    <h2 class="sec">KEY INDICATORS</h2>
+    <div class="grid" id="keycards"></div>
+
+    <h2 class="sec">🔔 ALERTS <small>notify me when →</small></h2>
+    <div class="chips">
+      <span class="chip">score crosses 15</span>
+      <span class="chip">score crosses 85</span>
+      <span class="chip">price enters bottom zone</span>
+      <span class="chip">price reclaims 350d MA</span>
+    </div>
+    <div class="note">Coming soon. Alerts will be delivered to members by email.</div>
+
+    <h2 class="sec">LATEST FROM THE CHANNEL</h2>
+    <div class="vids">
+      <div class="vid"><div class="th">latest video</div><p>Pulls automatically from YouTube</p></div>
+      <div class="vid"><div class="th">second most recent</div><p>Pulls automatically from YouTube</p></div>
+      <div class="vid"><div class="th">third most recent</div><p>Pulls automatically from YouTube</p></div>
+    </div>
+  </section>
+
+  <!-- ================= LEVELS ================= -->
+  <section class="page" id="p-levels">
+    <h2 class="sec">EVERY COST BASIS MODEL, ONE PRICE AXIS</h2>
+    <div class="note" id="levsub"></div>
+    <div id="levchart"></div>
+    <h2 class="sec">THE LEVELS</h2>
+    <table id="levtable"></table>
+  </section>
+
+  <!-- ================= MACRO ================= -->
+  <section class="page" id="p-macro">
+    <h2 class="sec">THE DEBASEMENT ENGINE</h2>
+    <div class="grid" id="macro-money"></div>
+    <h2 class="sec">RATE REGIME</h2>
+    <div class="grid" id="macro-rates"></div>
+    <h2 class="sec">CROSS-ASSET WATCHLIST</h2>
+    <table id="watch2"></table>
+  </section>
+
+  <!-- ================= ON-CHAIN ================= -->
+  <section class="page" id="p-onchain">
+    <h2 class="sec">PROFITABILITY <small>who is in profit, who is underwater</small></h2>
+    <div class="grid" id="oc-prof"></div>
+    <h2 class="sec">COHORT BEHAVIOR <small>who is holding, who is selling</small></h2>
+    <div class="grid" id="oc-coh"></div>
+  </section>
+
+  <!-- ================= MINING ================= -->
+  <section class="page" id="p-mining">
+    <h2 class="sec">MINER STRESS <small>the supply side of the market</small></h2>
+    <div class="grid" id="mn-cards"></div>
+    <div class="callout">
+      <b>WHY THIS PAGE MATTERS</b>
+      <p>Miners are the only structural sellers in the market. When their revenue compresses,
+         forced selling dries up and the supply overhang clears. That is why Puell below 1.0
+         has marked the bottom of every cycle.</p>
+    </div>
+  </section>
+
+  <footer><span id="foot">EDUCATIONAL ONLY · NOT FINANCIAL ADVICE</span></footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => n==null ? '–' : n.toLocaleString('en-US',{maximumFractionDigits:0});
+const money = n => n==null ? '–' : '$'+n.toLocaleString('en-US',{maximumFractionDigits:0});
+const sig = n => {
+  if(n==null) return '–';
+  const a = Math.abs(n);
+  if(a>=1000) return n.toLocaleString('en-US',{maximumFractionDigits:0});
+  if(a>=1) return n.toFixed(2);
+  if(a>=0.001) return n.toFixed(4);
+  return n.toExponential(2);
+};
+const pcCls = p => p==null ? 'flat' : (p<25 ? 'cool' : p>75 ? 'hot' : 'warm');
+const arrow = t => t==='down' ? '<span class="cool">▼</span>'
+                 : t==='up' ? '<span class="warm">▲</span>' : '';
+
+function spark(vals, w=100, h=22, color='#2dd4bf'){
+  if(!vals || vals.length<2) return '';
+  const mn=Math.min(...vals), mx=Math.max(...vals), rg=(mx-mn)||1;
+  const pts = vals.map((v,i)=>{
+    const x=(i/(vals.length-1))*w, y=h-((v-mn)/rg)*h;
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px" preserveAspectRatio="none">
+    <polyline fill="none" stroke="${color}" stroke-width="1.4" points="${pts}"/></svg>`;
+}
+
+function card(k, o, dim){
+  const cls = pcCls(o.percentile);
+  const extra = o.classification ? `<span class="badge">${o.classification}</span>` : '';
+  const doOnly = (o.weight===0) ? `<span class="badge">not scored</span>` : '';
+  return `<div class="card${dim?' dim':''}">
+    <div class="top"><span class="nm">${o.label}${doOnly}</span>
+      <span class="pc ${cls}">${o.percentile!=null?o.percentile+' pct':''}</span></div>
+    <div class="val">${sig(o.value)}${o.unit||''} ${arrow(o.trend)}${extra}</div>
+    ${spark(o.sparkline, 100, 22, cls==='cool'?'#2dd4bf':cls==='hot'?'#e2504a':'#9aa4b0')}
+    <div class="rd">${o.read||''}</div>
+  </div>`;
+}
+
+function macroCard(o){
+  return `<div class="card">
+    <div class="top"><span class="nm">${o.label}</span>
+      <span class="pc ${o.chg_30d>=0?'up':'down'}">${o.chg_30d>=0?'+':''}${o.chg_30d}% ${o.chg_short_label||'30d'}</span></div>
+    <div class="val">${sig(o.value)}${o.unit||''}</div>
+    ${spark(o.sparkline,100,26,'#9aa4b0')}
+    <div class="rd">${o.read||''}</div>
+    <div class="note">as of ${o.as_of||'–'} · ${o.chg_long_label||'ytd'} ${o.chg_ytd>=0?'+':''}${o.chg_ytd}%</div>
+  </div>`;
+}
+
+function histChart(h){
+  const W=640,H=150;
+  if(!h||h.length<2) return '';
+  const mn=0,mx=100;
+  const pts=h.map((v,i)=>{
+    const x=(i/(h.length-1))*W, y=H-((v-mn)/(mx-mn))*H;
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  const lastY = H-((h[h.length-1])/100)*H;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:160px" preserveAspectRatio="none">
+    <rect x="0" y="0" width="${W}" height="${H*0.15}" fill="#e2504a" opacity="0.10"/>
+    <rect x="0" y="${H*0.85}" width="${W}" height="${H*0.15}" fill="#2dd4bf" opacity="0.12"/>
+    <text x="6" y="14" fill="#e2504a" font-size="8" font-family="monospace" opacity=".8">TOP / HARD SELL 85-100</text>
+    <text x="6" y="${H-5}" fill="#3dd6c0" font-size="8" font-family="monospace" opacity=".8">BOTTOM / HARD BUY 0-15</text>
+    <polyline fill="none" stroke="#9aa4b0" stroke-width="1.5" points="${pts}"/>
+    <circle cx="${W}" cy="${lastY.toFixed(1)}" r="4" fill="#2dd4bf"/>
+  </svg>`;
+}
+
+function priceChart(series, lv){
+  const W=640,H=170;
+  if(!series||series.length<2) return '';
+  const all=[...series, lv.sma_350d, lv.lth_realized].filter(v=>v!=null);
+  const mn=Math.min(...all)*0.96, mx=Math.max(...all)*1.02, rg=mx-mn;
+  const y=v=>H-((v-mn)/rg)*H;
+  const pts=series.map((v,i)=>((i/(series.length-1))*W).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+  const ySma=y(lv.sma_350d), yLth=y(lv.lth_realized), yReal=y(lv.realized);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:180px" preserveAspectRatio="none">
+    <rect x="0" y="${ySma.toFixed(1)}" width="${W}" height="${Math.max(0,yLth-ySma).toFixed(1)}" fill="#2dd4bf" opacity="0.09"/>
+    <rect x="0" y="${yLth.toFixed(1)}" width="${W}" height="${Math.max(0,(yReal-yLth)).toFixed(1)}" fill="#2dd4bf" opacity="0.22"/>
+    <line x1="0" y1="${ySma.toFixed(1)}" x2="${W}" y2="${ySma.toFixed(1)}" stroke="#2dd4bf" stroke-width="1.2" stroke-dasharray="5 3" opacity=".75"/>
+    <line x1="0" y1="${yLth.toFixed(1)}" x2="${W}" y2="${yLth.toFixed(1)}" stroke="#2dd4bf" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>
+    <text x="7" y="${(ySma-4).toFixed(1)}" fill="#3dd6c0" font-size="8" font-family="monospace">350d MA ${money(lv.sma_350d)} · ACCUMULATION BELOW</text>
+    <text x="7" y="${(yLth-4).toFixed(1)}" fill="#3dd6c0" font-size="8" font-family="monospace">BOTTOM ZONE · LTH BASIS ${money(lv.lth_realized)}</text>
+    <polyline fill="none" stroke="#e6edf3" stroke-width="1.6" points="${pts}"/>
+    <circle cx="${W}" cy="${y(series[series.length-1]).toFixed(1)}" r="4" fill="#2dd4bf"/>
+  </svg>`;
+}
+
+function levelsChart(rows, spot){
+  const W=640,H=250;
+  if(!rows||!rows.length) return '';
+  const vals=rows.map(r=>r.value);
+  const mn=Math.min(...vals)*0.9, mx=Math.max(...vals)*1.05, rg=mx-mn;
+  const y=v=>H-((v-mn)/rg)*H;
+  const colors={vaulted:'#8b7fd4',sma_350d:'#2dd4bf',true_market_mean:'#5aa9e6',
+                sth_realized:'#e0a838',realized:'#9aa4b0',lth_realized:'#2dd4bf',price:'#e6edf3'};
+  let out='';
+  rows.forEach(r=>{
+    if(r.key==='price') return;
+    const yy=y(r.value).toFixed(1), c=colors[r.key]||'#9aa4b0';
+    out+=`<line x1="88" y1="${yy}" x2="${W}" y2="${yy}" stroke="${c}" stroke-width="1.1" stroke-dasharray="4 3" opacity=".75"/>
+          <text x="4" y="${(+yy+3).toFixed(1)}" fill="${c}" font-size="8.5" font-family="monospace">${r.label.toUpperCase()}</text>`;
+  });
+  const ys=y(spot).toFixed(1);
+  out+=`<line x1="88" y1="${ys}" x2="${W}" y2="${ys}" stroke="#e6edf3" stroke-width="1.8"/>
+        <circle cx="${W}" cy="${ys}" r="4.5" fill="#2dd4bf"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:260px">${out}</svg>`;
+}
+
+function boot(d){
+  $('#boot').style.display='none';
+  $('#p-monitor').style.display='block';
+  const s=d.score, lv=d.levels;
+
+  $('#stamp').textContent='UPDATED '+(d.updated||'').replace('T',' ').replace('Z',' UTC');
+  $('#score').textContent=s.composite;
+  $('#regime').textContent=s.regime;
+  $('#verdict').textContent=s.verdict;
+  $('#quart').textContent=`${s.in_bottom_quartile} of ${s.total_indicators} indicators in the bottom quartile`;
+  $('#lookback').textContent=`percentiles vs. ${Math.round((d.history_window_days||4500)/365)} years of history`;
+  if(s.delta_30d!=null){
+    const dn=s.delta_30d<0;
+    $('#delta').innerHTML=`<span class="${dn?'cool':'warm'}">${dn?'▼':'▲'} ${Math.abs(s.delta_30d)}</span> <span class="note">30d</span>`;
+  }
+
+  $('#histchart').innerHTML=histChart(s.history);
+  const above=s.history.filter(x=>x>85).length, below=s.history.filter(x=>x<15).length;
+  $('#histnote').textContent=`The score has printed above 85 at cycle tops (${above} readings) and below 15 at cycle bottoms (${below} readings). It is at ${s.composite} today.`;
+
+  $('#pricechart').innerHTML=priceChart(d.price_series, lv);
+  $('#mark').style.left=Math.min(99,Math.max(0,s.composite))+'%';
+
+  const gl=$('#glabels').children;
+  const idx = s.composite<15?0 : s.composite<35?1 : s.composite<65?2 : s.composite<85?3 : 4;
+  [...gl].forEach((el,i)=>el.className = i===idx?'on':'');
+
+  const ck=d.cycle_clock||{};
+  $('#clock').innerHTML=`
+    <div><div class="k">DAYS SINCE ATH</div><div class="v">${ck.days_since_ath??'–'}</div></div>
+    <div><div class="k">ATH</div><div class="v">${money(ck.ath)}</div></div>
+    <div><div class="k">SCORE 30D</div><div class="v">${s.delta_30d>=0?'+':''}${s.delta_30d??'–'}</div></div>`;
+  $('#clocknote').textContent=ck.note||'';
+
+  $('#strip').innerHTML=`
+    <div><div class="k">BTC PRICE</div><div class="v">${money(lv.price)}</div></div>
+    <div><div class="k">ACCUM BELOW</div><div class="v cool">${money(lv.sma_350d)}</div></div>
+    <div><div class="k">BOTTOM ZONE</div><div class="v cool">${money(lv.lth_realized)}</div></div>
+    <div><div class="k">TRUE MKT MEAN</div><div class="v">${money(lv.true_market_mean)}</div></div>`;
+
+  const wl = (d.watchlist||[]).map(w=>`<tr><td>${w.ticker}</td><td>${sig(w.price)}</td>
+      <td class="${w.d30>=0?'up':'down'}">${w.d30!=null?(w.d30>=0?'+':'')+w.d30+'%':'–'}</td>
+      <td class="${w.ytd>=0?'up':'down'}">${w.ytd!=null?(w.ytd>=0?'+':'')+w.ytd+'%':'–'}</td></tr>`).join('');
+  const wh=`<tr><th>TICKER</th><th>PRICE</th><th>30D</th><th>YTD</th></tr>`;
+  $('#watch').innerHTML=wh+wl; $('#watch2').innerHTML=wh+wl;
+
+  const I=d.indicators;
+  const pick=(f)=>Object.entries(I).filter(([k,v])=>f(v));
+  const render=(el,list)=>{ const n=$(el); if(n) n.innerHTML=list.map(([k,v])=>card(k,v,v.weight===0)).join(''); };
+
+  const key=['reserve_risk','sell_side_risk','rhodl','mvrv','puell','fear_greed'];
+  render('#keycards', key.filter(k=>I[k]).map(k=>[k,I[k]]));
+  render('#oc-prof', pick(v=>v.page==='onchain'&&v.group==='profitability'));
+  render('#oc-coh',  pick(v=>v.page==='onchain'&&v.group==='cohort'));
+  render('#mn-cards',pick(v=>v.page==='mining'));
+
+  const M=d.macro||{};
+  $('#macro-money').innerHTML=['m2','dxy'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
+  $('#macro-rates').innerHTML=['us2y','us10y','us30y'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
+
+  const lt=d.levels_table||[];
+  $('#levsub').textContent=`BTC ${money(lv.price)} — below ${lt.filter(r=>r.value>lv.price).length} of ${lt.length-1} models`;
+  $('#levchart').innerHTML=levelsChart(lt, lv.price);
+  $('#levtable').innerHTML=`<tr><th>LEVEL</th><th>VALUE</th><th>VS SPOT</th><th class="mean">WHAT IT MEANS</th></tr>`+
+    lt.map(r=>`<tr class="${r.key==='price'?'spot':''}"><td>${r.label}</td><td>${money(r.value)}</td>
+      <td class="${r.vs_spot_pct>=0?'up':'down'}">${r.vs_spot_pct>=0?'+':''}${r.vs_spot_pct}%</td>
+      <td class="mean">${r.meaning||''}</td></tr>`).join('');
+
+  // "what changed" — biggest 30d movers among scored indicators
+  const movers=Object.values(I).filter(v=>v.weight>0&&v.trend!=='flat').slice(0,3)
+    .map(v=>`${v.label} ${v.trend==='down'?'fell':'rose'} to ${sig(v.value)}${v.unit||''}`);
+  $('#changed').textContent = movers.length
+    ? movers.join('. ')+'. Composite at '+s.composite+', '+s.regime.toLowerCase()+'.'
+    : 'Composite at '+s.composite+', '+s.regime.toLowerCase()+'.';
+
+  $('#foot').textContent='DATA VIA '+(d.source||'BRK + FRED').toUpperCase()+' · EDUCATIONAL ONLY · NOT FINANCIAL ADVICE';
+}
+
+document.querySelectorAll('#nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('.page').forEach(p=>{p.classList.remove('on');p.style.display='none';});
+    const t=$('#p-'+b.dataset.p); t.classList.add('on'); t.style.display='block';
+    window.scrollTo(0,0);
+  };
+});
+
+fetch('monitor.json?t='+Date.now())
+  .then(r=>r.json()).then(boot)
+  .catch(e=>{ $('#boot').textContent='Could not load monitor.json — '+e.message; });
+</script>
+</body>
+</html>
