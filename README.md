@@ -27,11 +27,22 @@ send `Access-Control-Allow-Origin: *`):
 Macro (FRED), gold, and the video strip stay on the daily Action because those
 sources do not send CORS headers.
 
+**Shorts are excluded from the video strip.** The channel's `/videos` page lists
+uploads with their durations, and anything 3 minutes or under is dropped before
+the strip is built.
+
 ## Cost-basis charts
-The Monitor price chart and the Levels chart both carry a
-**HISTORICAL / CURRENT LEVELS** toggle. Historical draws each cost-basis model
-as its real curve through time; Current draws them as flat lines at today's
-value. Both charts span the full ~15 years of available history (2011 onward).
+The Monitor price chart and the Levels chart each carry three controls:
+
+- **HISTORICAL / CURRENT LEVELS** — historical draws every cost-basis model as
+  its real curve through time; current draws them as flat lines at today's value.
+- **LIN / LOG** — linear or logarithmic price scale.
+- **Range** — 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, ALL. Both default to 3Y.
+
+Ranges of 1Y and under render from a true daily series (`points_daily`, the last
+400 days); longer ranges use the downsampled full history (`points`, ~430 points
+across ~15 years). Every range is clamped to the earliest available datapoint, so
+a chart never shows empty space to the left of where the data starts.
 
 ## Scored indicators (16)
 MVRV · STH MVRV · LTH MVRV · NUPL · Supply in Profit · Reserve Risk · RHODL ·
@@ -49,7 +60,7 @@ CSV endpoint. **No API key required.**
 | [FRED](https://fred.stlouisfed.org) | M2, DXY, Treasury yields |
 | [alternative.me](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed, 3,090 days |
 | Yahoo Finance | Spot gold (COMEX `GC=F`) for the cross-asset table |
-| YouTube RSS | Latest 3 uploads for the channel strip (no API key) |
+| YouTube `/videos` page | Latest 3 long-form uploads for the channel strip (no API key) |
 
 ## Display-only (not scored)
 - **Liveliness** — trends structurally upward over time, so a percentile rank
