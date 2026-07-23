@@ -24,7 +24,14 @@ send `Access-Control-Allow-Origin: *`):
   exact percentile math `build_monitor.py` uses, to within the 201-point
   quantile resolution.
 
-Macro (FRED) stays on the daily Action because FRED does not send CORS headers.
+Macro (FRED), gold, and the video strip stay on the daily Action because those
+sources do not send CORS headers.
+
+## Cost-basis charts
+The Monitor price chart and the Levels chart both carry a
+**HISTORICAL / CURRENT LEVELS** toggle. Historical draws each cost-basis model
+as its real curve through time; Current draws them as flat lines at today's
+value. Both charts span the full ~15 years of available history (2011 onward).
 
 ## Scored indicators (16)
 MVRV · STH MVRV · LTH MVRV · NUPL · Supply in Profit · Reserve Risk · RHODL ·
@@ -41,6 +48,8 @@ CSV endpoint. **No API key required.**
 | [Bitcoin Research Kit](https://bitview.space) | All on-chain series, 4,500 days |
 | [FRED](https://fred.stlouisfed.org) | M2, DXY, Treasury yields |
 | [alternative.me](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed, 3,090 days |
+| Yahoo Finance | Spot gold (COMEX `GC=F`) for the cross-asset table |
+| YouTube RSS | Latest 3 uploads for the channel strip (no API key) |
 
 ## Display-only (not scored)
 - **Liveliness** — trends structurally upward over time, so a percentile rank
@@ -105,8 +114,6 @@ Then open http://localhost:8000
 - Wire the "Alerts" chips (score crosses 15/85, price enters bottom zone,
   price reclaims 350d MA) to member email delivery — the UI is in place,
   labeled Coming Soon.
-- Real YouTube thumbnails/titles in the "Latest from the channel" strip
-  (currently links to the channel).
-- Gold / S&P / BTC-GOLD ratio in the cross-asset watchlist.
+- S&P and a BTC-GOLD ratio row in the cross-asset watchlist (gold is in).
 
 Educational only. Not financial advice.
