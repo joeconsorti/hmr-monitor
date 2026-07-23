@@ -21,7 +21,9 @@
   header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:30}
   .hbar{max-width:1180px;margin:0 auto;padding:14px 18px 12px;display:flex;
         justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:11px}
+  .brand{display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
+  .brand:hover .tt b{color:var(--orange)}
+  .brand:focus-visible{outline:2px solid var(--orange);outline-offset:4px;border-radius:3px}
   .dot{width:11px;height:11px;background:var(--orange);border-radius:2px;
        box-shadow:0 0 0 0 rgba(253,111,11,.5);animation:pulse 3s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(253,111,11,.45)}70%{box-shadow:0 0 0 7px rgba(253,111,11,0)}100%{box-shadow:0 0 0 0 rgba(253,111,11,0)}}
@@ -39,7 +41,6 @@
         position:sticky;top:57px;z-index:25;height:34px;white-space:nowrap}
   .tape-track{display:inline-flex;align-items:center;height:34px;will-change:transform;
               animation:scroll 90s linear infinite}
-  .tape:hover .tape-track{animation-play-state:paused}
   @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   .ti{display:inline-flex;align-items:center;gap:7px;padding:0 18px;font-size:11px;
       border-right:1px solid var(--line2)}
@@ -55,6 +56,11 @@
          display:flex;align-items:center;gap:9px}
   h2.sec:before{content:"";width:5px;height:5px;background:var(--orange);border-radius:1px;flex:none}
   h2.sec small{color:var(--mut3);letter-spacing:0;font-size:10px;margin-left:2px}
+  .tog{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .tog button{background:none;border:none;color:var(--mut3);font-family:var(--mono);font-size:8.5px;
+              letter-spacing:1px;padding:4px 11px;cursor:pointer}
+  .tog button.on{background:var(--orange);color:#0d1117;font-weight:600}
+  .tog button:not(.on):hover{color:var(--txt2)}
 
   .hero{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:26px 0 8px}
   .hero .lbl{font-size:10px;letter-spacing:2px;color:var(--mut2);margin-bottom:7px}
@@ -126,9 +132,13 @@
   .vids{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
   .vid{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;
        text-decoration:none;color:inherit;display:block}
-  .vid .th{height:96px;background:linear-gradient(135deg,#1c2530,#131a22);
+  .vid{transition:border-color .15s}
+  .vid:hover{border-color:var(--orange)}
+  .vid .th{height:0;padding-bottom:56.25%;background:linear-gradient(135deg,#1c2530,#131a22);
+           background-size:cover;background-position:center;
            display:flex;align-items:center;justify-content:center;color:var(--mut3);font-size:9px}
-  .vid p{margin:0;padding:10px;font-size:10px;color:var(--txt2);line-height:1.45}
+  .vid p{margin:0;padding:10px 10px 4px;font-size:10.5px;color:var(--txt2);line-height:1.4}
+  .vid .vdate{padding:0 10px 10px;font-size:8.5px;letter-spacing:1px;color:var(--mut3)}
 
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .chip{background:var(--tealbg);border:1px solid var(--tealbd);color:var(--teal2);
@@ -173,7 +183,7 @@
 
 <header>
   <div class="hbar">
-    <div class="brand">
+    <div class="brand" id="brandhome" role="button" tabindex="0" title="Back to Monitor">
       <i class="dot"></i>
       <div class="tt"><b>Bitcoin Cycle Monitor</b><span>THE HARD MONEY ROOM</span></div>
     </div>
@@ -220,7 +230,7 @@
       <div class="mark" id="mark"></div>
     </div>
     <div class="glabels" id="glabels">
-      <span>BOTTOM/HARD BUY</span><span>ACCUM</span><span>MID</span>
+      <span>BOTTOM/HARD BUY</span><span>ACCUMULATION</span><span>MID</span>
       <span>EUPHORIA</span><span>TOP/HARD SELL</span>
     </div>
 
@@ -231,7 +241,11 @@
     <h2 class="sec">KEY LEVELS <small>the prices that matter right now</small></h2>
     <div class="strip" id="strip"></div>
 
-    <h2 class="sec">BTC PRICE · COST-BASIS ZONES</h2>
+    <h2 class="sec">BTC PRICE · COST-BASIS ZONES
+      <span class="tog" id="pricetog">
+        <button class="on" data-m="hist">HISTORICAL</button><button data-m="flat">CURRENT LEVELS</button>
+      </span>
+    </h2>
     <div id="pricechart" class="lwchart"></div>
     <div class="leg" id="pricelegend"></div>
 
@@ -266,7 +280,11 @@
   </section>
 
   <section class="page" id="p-levels">
-    <h2 class="sec">EVERY COST-BASIS MODEL, ONE PRICE AXIS <small id="levsub"></small></h2>
+    <h2 class="sec">EVERY COST-BASIS MODEL, ONE PRICE AXIS <small id="levsub"></small>
+      <span class="tog" id="levtog">
+        <button class="on" data-m="hist">HISTORICAL</button><button data-m="flat">CURRENT LEVELS</button>
+      </span>
+    </h2>
     <div id="levchart" class="lwchart" style="height:420px"></div>
     <div class="leg" id="levlegend"></div>
     <h2 class="sec">THE LEVELS</h2>
@@ -363,24 +381,36 @@ function indicatorMiniChart(el, o){
   c.timeScale().fitContent();
 }
 
+/* mode: 'hist' = real historical model curves, 'flat' = current level lines */
+let PRICE_MODE='hist', LEV_MODE='hist';
+
+const COSTBASIS=[
+  ['sma_350d','350d MA','#2dd4bf'],
+  ['true_market_mean','True Mkt Mean','#5aa9e6'],
+  ['realized','Realized','#9aa4b0'],
+  ['lth_realized','LTH Basis (bottom zone)','#e0a838'],
+];
+
 function priceChart(){
   const el=$('#pricechart'); if(!el||!DATA.price_series_dated) return;
-  const lv=DATA.levels;
+  const lv=DATA.levels, ls=DATA.level_series||{};
   const c=makeChart(el, 340);
   const price=c.addLineSeries({color:'#e6edf3',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
   price.setData(toLine(DATA.price_series_dated));
-  const refs=[
-    ['350d MA', lv.sma_350d, '#2dd4bf'],
-    ['True Mkt Mean', lv.true_market_mean, '#5aa9e6'],
-    ['Realized', lv.realized, '#9aa4b0'],
-    ['LTH Basis (bottom zone)', lv.lth_realized, '#e0a838'],
-  ];
-  refs.forEach(([t,v,col])=>{ if(v!=null) price.createPriceLine(
-    {price:v,color:col,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:t}); });
+  const leg=[];
+  COSTBASIS.forEach(function(row){
+    const key=row[0], label=row[1], col=row[2];
+    if(PRICE_MODE==='hist' && ls[key] && ls[key].points && ls[key].points.length){
+      const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+      s2.setData(toLine(ls[key].points));
+    } else if(lv[key]!=null){
+      price.createPriceLine({price:lv[key],color:col,lineWidth:1,lineStyle:2,
+                             axisLabelVisible:true,title:label});
+    }
+    leg.push('<span><i style="background:'+col+'"></i>'+label+'</span>');
+  });
   c.timeScale().fitContent();
-  $('#pricelegend').innerHTML = refs.map(([t,,col])=>
-    '<span><i style="background:'+col+'"></i>'+t+'</span>').join('')+
-    '<span><i style="background:#e6edf3"></i>BTC spot</span>';
+  $('#pricelegend').innerHTML='<span><i style="background:#e6edf3"></i>BTC spot</span>'+leg.join('');
 }
 
 function histChart(){
@@ -420,18 +450,30 @@ function fgDial(){
 
 function levelsChart(){
   const el=$('#levchart'); const ls=DATA.level_series; if(!el||!ls) return;
+  const lv=DATA.levels;
   const c=makeChart(el, 420);
   const colors={vaulted:'#8b7fd4',sma_350d:'#2dd4bf',true_market_mean:'#5aa9e6',
                 sth_realized:'#e0a838',realized:'#9aa4b0',lth_realized:'#e0873a',price:'#e6edf3'};
   const order=['price','vaulted','sma_350d','true_market_mean','realized','sth_realized','lth_realized'];
   const leg=[];
-  order.forEach(k=>{
-    if(!ls[k]) return;
-    const col=colors[k]||'#9aa4b0';
-    const s=c.addLineSeries({color:col,lineWidth:k==='price'?2:1,priceLineVisible:false,lastValueVisible:true});
-    s.setData(toLine(ls[k].points));
-    leg.push('<span><i style="background:'+col+'"></i>'+ls[k].label+'</span>');
-  });
+  // price always draws as a real series so the axis has a time span in both modes
+  if(ls.price){
+    const ps=c.addLineSeries({color:colors.price,lineWidth:2,priceLineVisible:false,lastValueVisible:true});
+    ps.setData(toLine(ls.price.points));
+    leg.push('<span><i style="background:'+colors.price+'"></i>'+ls.price.label+'</span>');
+    order.forEach(function(k){
+      if(k==='price'||!ls[k]) return;
+      const col=colors[k]||'#9aa4b0';
+      if(LEV_MODE==='hist'){
+        const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+        s2.setData(toLine(ls[k].points));
+      } else if(lv[k]!=null){
+        ps.createPriceLine({price:lv[k],color:col,lineWidth:1,lineStyle:2,
+                            axisLabelVisible:true,title:ls[k].label});
+      }
+      leg.push('<span><i style="background:'+col+'"></i>'+ls[k].label+'</span>');
+    });
+  }
   c.timeScale().fitContent();
   $('#levlegend').innerHTML=leg.join('');
 }
@@ -491,6 +533,17 @@ function buildTape(livePrice){
   $('#tape').innerHTML=run+run;
 }
 
+function renderVideos(){
+  const box=$('#vids'); const vs=DATA.videos; if(!box||!vs||!vs.length) return;
+  box.innerHTML=vs.map(function(v){
+    return '<a class="vid" href="'+v.url+'" target="_blank" rel="noopener">'+
+      '<div class="th" style="background-image:url('+v.thumb+')"></div>'+
+      '<p>'+v.title+'</p>'+
+      '<div class="vdate">'+v.published+'</div>'+
+    '</a>';
+  }).join('');
+}
+
 function watchTable(){
   const wl=(DATA.watchlist||[]).map(w=>'<tr><td>'+w.ticker+'</td><td>'+sig(w.price)+'</td>'+
     '<td class="'+(w.d30>=0?'up':'down')+'">'+pct1(w.d30)+'</td>'+
@@ -527,7 +580,7 @@ function renderStrip(){
   const lv=DATA.levels;
   $('#strip').innerHTML=
     '<div><div class="k">BTC PRICE</div><div class="v" id="stripPrice">'+money(lv.price)+'</div></div>'+
-    '<div><div class="k">ACCUM BELOW</div><div class="v cool">'+money(lv.sma_350d)+'</div></div>'+
+    '<div><div class="k">ACCUMULATE BELOW</div><div class="v cool">'+money(lv.sma_350d)+'</div></div>'+
     '<div><div class="k">BOTTOM ZONE</div><div class="v cool">'+money(lv.lth_realized)+'</div></div>'+
     '<div><div class="k">TRUE MKT MEAN</div><div class="v">'+money(lv.true_market_mean)+'</div></div>';
 }
@@ -561,10 +614,10 @@ function renderAll(){
   $('#macro-money').innerHTML=['m2','dxy'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
   $('#macro-rates').innerHTML=['us2y','us10y','us30y'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
 
-  levelsTable(); levelsChart(); watchTable();
+  levelsTable(); levelsChart(); watchTable(); renderVideos();
 
   $('#foot').textContent='Data via '+(DATA.source||'BRK + FRED');
-  $('#stamp').innerHTML='<span class="livedot"></span>LIVE \u00b7 JSON UPDATED '+((DATA.updated||'').replace('T',' ').replace('Z',' UTC'));
+  $('#stamp').innerHTML='<span class="livedot"></span>LIVE \u00b7 UPDATED '+((DATA.updated||'').replace('T',' ').replace('Z',' UTC'));
 }
 
 function rankAgainst(value, q){
@@ -657,6 +710,44 @@ document.querySelectorAll('#nav button').forEach(b=>{
     setTimeout(resizeCharts, 30);
   };
 });
+function showPage(name){
+  document.querySelectorAll('#nav button').forEach(x=>{
+    x.classList.toggle('on', x.dataset.p===name);
+  });
+  document.querySelectorAll('.page').forEach(p=>{p.classList.remove('on');p.style.display='none';});
+  const t=$('#p-'+name); if(t){ t.classList.add('on'); t.style.display='block'; }
+  window.scrollTo(0,0);
+  setTimeout(resizeCharts, 30);
+}
+function bindTog(sel, apply){
+  const box=$(sel); if(!box) return;
+  box.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      apply(b.dataset.m);
+    });
+  });
+}
+bindTog('#pricetog', function(m){
+  PRICE_MODE=m;
+  const el=$('#pricechart');
+  for(let i=charts.length-1;i>=0;i--){ if(charts[i].el===el){ try{charts[i].c.remove();}catch(e){} charts.splice(i,1); } }
+  priceChart();
+});
+bindTog('#levtog', function(m){
+  LEV_MODE=m;
+  const el=$('#levchart');
+  for(let i=charts.length-1;i>=0;i--){ if(charts[i].el===el){ try{charts[i].c.remove();}catch(e){} charts.splice(i,1); } }
+  levelsChart();
+});
+
+const _brand=$('#brandhome');
+if(_brand){
+  _brand.addEventListener('click', ()=>showPage('monitor'));
+  _brand.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); showPage('monitor'); } });
+}
+
 function resizeCharts(){
   charts.forEach(h=>{ try{ h.c.resize(h.el.clientWidth, h.h); }catch(e){} });
 }
