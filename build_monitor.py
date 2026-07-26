@@ -480,6 +480,46 @@ def fetch_dates(days=HISTORY_DAYS):
         return None
 
 
+def fetch_series_hourly(name, hours=336):
+    """Fetch an hourly BRK series (default last ~14 days). Returns list or None.
+    Used to give the 1W and 1M chart ranges true intraday resolution."""
+    url = f"{BRK}/series/{name}/hour/data"
+    try:
+        r = requests.get(url, params={"from": -hours}, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"  ! {name} (hourly): {e}", file=sys.stderr)
+        return None
+
+
+def fetch_hour_timestamps(hours=336):
+    """Fetch the BRK hourly Unix-timestamp index aligned to hourly series."""
+    url = f"{BRK}/series/timestamp/hour/data"
+    try:
+        r = requests.get(url, params={"from": -hours}, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"  ! hour timestamps: {e}", file=sys.stderr)
+        return None
+
+
+def hourly_pairs(timestamps, values):
+    """Zip hourly Unix timestamps + values into [{t: <unix_seconds>, v: float}].
+    Lightweight Charts accepts a Unix timestamp (seconds) for intraday points,
+    which is how the 1W/1M ranges get real hourly resolution instead of daily."""
+    if not timestamps or not values:
+        return []
+    n = min(len(timestamps), len(values))
+    ts, vs = timestamps[-n:], values[-n:]
+    out = []
+    for t, v in zip(ts, vs):
+        if isinstance(v, (int, float)) and isinstance(t, (int, float)):
+            out.append({"t": int(t), "v": round(v, 6)})
+    return out
+
+
 def dated_downsample(dates, values, target=200):
     """Zip dates+values (tail-aligned), drop Nones, downsample to ~target points.
     Returns list of {t: 'YYYY-MM-DD', v: float} for Lightweight Charts."""
@@ -704,11 +744,14 @@ def build():
     # ---- dated level series (Levels + Monitor cost-basis charts) ----------
     # Price plus each cost-basis model as its own line over the full ~15-year
     # date axis. Powers the HISTORICAL mode of the cost-basis toggle.
-    # Two resolutions per model:
-    #   points       ~430 pts across the full ~15y span (long ranges)
-    #   points_daily  every day for the last ~2y (1W/1M/3M/6M/1Y ranges)
+    # Three resolutions per model:
+    #   points        ~430 pts across the full ~15y span (long ranges)
+    #   points_daily  every day for the last ~2y (3M/6M/1Y ranges)
+    #   points_hourly true hourly for the last ~14 days (1W/1M ranges)
     # The front end picks whichever fits the selected range so short windows
-    # always render true daily candles instead of a sparse downsample.
+    # render at genuine intraday resolution instead of a sparse downsample.
+    print("Fetching hourly series for 1W/1M ranges...")
+    hour_ts = fetch_hour_timestamps(336)   # ~14 days of hourly index
     level_series = {}
     for key, data in levels_raw.items():
         ser = dated_downsample(all_dates, data, target=420)
@@ -716,8 +759,16 @@ def build():
             label, meaning = LEVEL_META.get(key, (key, ""))
             daily = dated_downsample(all_dates[-DAILY_TAIL:], data[-DAILY_TAIL:],
                                      target=DAILY_TAIL)
-            level_series[key] = {"label": label, "points": ser,
-                                 "points_daily": daily}
+            entry = {"label": label, "points": ser, "points_daily": daily}
+            # hourly overlay for the short ranges (BRK hourly series share the
+            # same names as the daily ones)
+            brk_name = LEVELS.get(key)
+            if hour_ts and brk_name:
+                hvals = fetch_series_hourly(brk_name, 336)
+                hourly = hourly_pairs(hour_ts, hvals) if hvals else []
+                if hourly:
+                    entry["points_hourly"] = hourly
+            level_series[key] = entry
     out["level_series"] = level_series
 
     # ---- price chart series for the hero (dated, for the monitor page) -----
@@ -726,6 +777,12 @@ def build():
         out["price_series_dated"] = dated_downsample(all_dates, levels_raw["price"], target=420)
         out["price_series_daily"] = dated_downsample(
             all_dates[-DAILY_TAIL:], levels_raw["price"][-DAILY_TAIL:], target=DAILY_TAIL)
+        # true hourly price for the 1W/1M ranges
+        if hour_ts:
+            hpx = fetch_series_hourly("price", 336)
+            hourly_px = hourly_pairs(hour_ts, hpx) if hpx else []
+            if hourly_px:
+                out["price_series_hourly"] = hourly_px
 
     # ---- cycle clock -------------------------------------------------------
     if "price" in levels_raw:
