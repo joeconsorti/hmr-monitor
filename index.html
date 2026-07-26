@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>[DESIGN] Bitcoin Cycle Monitor — The Hard Money Room</title>
+<title>Bitcoin Cycle Monitor — The Hard Money Room</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23f7931a'/%3E%3Cpath fill='%23fff' d='M23.19 14.02c.3-2.01-1.23-3.09-3.32-3.81l.68-2.72-1.66-.41-.66 2.65c-.44-.11-.89-.21-1.33-.31l.66-2.66-1.66-.41-.68 2.72c-.36-.08-.72-.16-1.06-.25l0-.01-2.29-.57-.44 1.77s1.23.28 1.2.3c.67.17.79.61.77.96l-.77 3.1c.05.01.11.03.18.06l-.18-.05-1.08 4.34c-.08.2-.29.51-.76.39.02.02-1.2-.3-1.2-.3l-.82 1.9 2.16.54c.4.1.8.21 1.19.31l-.69 2.75 1.66.41.68-2.72c.45.12.89.24 1.32.34l-.68 2.71 1.66.41.69-2.75c2.83.54 4.96.32 5.86-2.24.72-2.06-.04-3.25-1.53-4.03 1.08-.25 1.9-.96 2.12-2.43zm-3.79 5.32c-.51 2.06-3.98.95-5.11.67l.91-3.65c1.12.28 4.74.83 4.2 2.98zm.51-5.35c-.47 1.87-3.36.92-4.3.69l.83-3.31c.94.23 3.96.67 3.47 2.62z'/%3E%3C/svg%3E">
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root{
@@ -20,7 +21,7 @@
 
   header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:30}
   .hbar{max-width:1180px;margin:0 auto;padding:14px 18px 12px;display:flex;
-        justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+        justify-content:flex-start;align-items:center;gap:24px;flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
   .brand:hover .tt b{color:var(--orange)}
   .brand:focus-visible{outline:2px solid var(--orange);outline-offset:4px;border-radius:3px}
@@ -30,7 +31,7 @@
   .brand .tt{display:flex;flex-direction:column;gap:2px}
   .brand .tt b{font-size:20px;letter-spacing:1px;font-weight:600;line-height:1}
   .brand .tt span{font-size:9.5px;letter-spacing:3px;color:var(--orange);font-weight:500}
-  nav{display:flex;gap:16px;flex-wrap:wrap}
+  nav{display:flex;gap:16px;flex-wrap:wrap;margin-left:auto}
   nav button{background:none;border:none;color:var(--mut3);font-family:var(--mono);
              font-size:11px;letter-spacing:1px;cursor:pointer;padding:4px 0;
              border-bottom:2px solid transparent}
@@ -228,6 +229,7 @@
     background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);
     color:#2dd4bf;font-size:12.5px}
   .req-done.on{display:block}
+  .req-done.err{background:rgba(226,80,74,.1);border-color:rgba(226,80,74,.35);color:#e2504a}
 </style>
 </head>
 <body>
@@ -415,6 +417,7 @@
     <div class="clock" id="netmetrics"></div>
 
     <h2 class="sec">HASH RIBBONS <small>when miners capitulate, bottoms follow</small></h2>
+    <div class="ranges" id="hribrange"></div>
     <div id="hribchart" class="lwchart"></div>
     <div class="note" id="hribnote"></div>
 
@@ -494,7 +497,7 @@ function indicatorMiniChart(el, o){
 /* mode: 'hist' = real historical model curves, 'flat' = current level lines */
 let PRICE_MODE='hist', LEV_MODE='hist';
 let PRICE_SCALE='linear', LEV_SCALE='linear';
-let PRICE_RANGE='3Y', LEV_RANGE='3Y', HIST_RANGE='ALL', HR_RANGE='3Y';
+let PRICE_RANGE='3Y', LEV_RANGE='3Y', HIST_RANGE='ALL', HR_RANGE='3Y', HRIB_RANGE='3Y';
 const LEV_OFF=new Set();   // cost-basis models toggled off on the Levels chart
 
 /* Range options, in days. ALL clamps to the earliest datapoint available, so a
@@ -505,12 +508,19 @@ const RANGES=[['1W',7],['1M',30],['3M',91],['6M',182],['1Y',365],
 function dayStr(d){ return d.toISOString().slice(0,10); }
 
 /* Visible window for a range key, clamped to the data's own span.
-   Returns {from,to} as 'YYYY-MM-DD', or null to show everything. */
+   Handles both ISO-date points (daily/dated series) and Unix-timestamp
+   points (hourly series for 1W/1M). Returns {from,to} in the same unit as
+   the points, or null to show everything. */
 function rangeWindow(points, key){
   if(!points||!points.length) return null;
   const first=points[0].t, last=points[points.length-1].t;
   const opt=RANGES.find(r=>r[0]===key);
   if(!opt||opt[1]==null) return {from:first,to:last};
+  if(typeof last==='number'){
+    // hourly points: work in Unix seconds
+    const start=last-opt[1]*86400;
+    return {from: start<first?first:start, to:last};
+  }
   const end=new Date(last+'T00:00:00Z');
   const start=new Date(end.getTime()-opt[1]*86400000);
   const from=dayStr(start);
@@ -518,19 +528,24 @@ function rangeWindow(points, key){
   return {from: from<first?first:from, to:last};
 }
 
-/* Ranges of 1Y or shorter use the true-daily tail; longer ranges use the
-   downsampled full history. Keeps short windows at daily resolution.
-   BUILD-TODO: for 1W and 1M, serve hourly price data instead of daily
-   (needs an hourly BRK/price series shipped as points_hourly). Design uses
-   daily as a stand-in until that source is wired. */
-const DAILY_RANGES={'1W':1,'1M':1,'3M':1,'6M':1,'1Y':1};
+/* Ranges 1W and 1M pull true hourly resolution; 3M-1Y pull the daily tail;
+   longer ranges use the downsampled full history. */
+const HOURLY_RANGES={'1W':1,'1M':1};
+const DAILY_RANGES={'3M':1,'6M':1,'1Y':1};
 function seriesFor(obj, key){
   if(!obj) return [];
+  if(HOURLY_RANGES[key] && obj.points_hourly && obj.points_hourly.length) return obj.points_hourly;
   if(DAILY_RANGES[key] && obj.points_daily && obj.points_daily.length) return obj.points_daily;
+  // fall back to daily tail for 1W/1M if hourly wasn't shipped this build
+  if(HOURLY_RANGES[key] && obj.points_daily && obj.points_daily.length) return obj.points_daily;
   return obj.points || [];
 }
 function priceSeriesFor(key){
+  if(HOURLY_RANGES[key] && DATA.price_series_hourly && DATA.price_series_hourly.length)
+    return DATA.price_series_hourly;
   if(DAILY_RANGES[key] && DATA.price_series_daily && DATA.price_series_daily.length)
+    return DATA.price_series_daily;
+  if(HOURLY_RANGES[key] && DATA.price_series_daily && DATA.price_series_daily.length)
     return DATA.price_series_daily;
   return DATA.price_series_dated || [];
 }
@@ -845,7 +860,7 @@ function hashRibbonsChart(){
   fast.setData(fastPts);
   const slow=c.addLineSeries({color:'#e2504a',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   slow.setData(slowPts);
-  applyRange(c, pts, HR_RANGE);
+  applyRange(c, pts, HRIB_RANGE);
   $('#hribnote').innerHTML=
     'The <span class="cool">fast average</span> crossing below the <span style="color:#e2504a">slow average</span> marks miner capitulation \u2014 the weakest miners switching off. Historically, the recovery cross that follows has been one of the most reliable buy signals bitcoin has.';
 }
@@ -916,7 +931,10 @@ function renderAll(){
     HIST_RANGE=r; rebuild('#histchart', histChart);
   });
   buildRangeBar('#hrrange', HR_RANGE, function(r){
-    HR_RANGE=r; rebuild('#hrchart', hashRateChart); rebuild('#hribchart', hashRibbonsChart);
+    HR_RANGE=r; rebuild('#hrchart', hashRateChart);
+  });
+  buildRangeBar('#hribrange', HRIB_RANGE, function(r){
+    HRIB_RANGE=r; rebuild('#hribchart', hashRibbonsChart);
   });
 
   $('#foot').textContent='Data via '+(DATA.source||'BRK + FRED');
@@ -1061,31 +1079,64 @@ if(_brand){
   _brand.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); showPage('monitor'); } });
 }
 
-/* Request modal. BUILD-TODO: on submit, POST to a small endpoint (or a
-   form service) that emails requests@joeconsorti.com, which auto-forwards
-   to the main inbox. Design just validates and shows the confirmation. */
+/* Request modal — live submit via Web3Forms (static-site form backend).
+   Email delivery target is set by the access key below. To point this at
+   requests@joeconsorti.com: create a key at https://web3forms.com using that
+   address, then paste it into WEB3FORMS_ACCESS_KEY. Web3Forms then emails
+   every submission to that address (which auto-forwards to the main inbox).
+   The access key is safe to expose in client code. */
+const WEB3FORMS_ACCESS_KEY = 'YOUR_WEB3FORMS_ACCESS_KEY';   // <-- paste key here
 (function(){
   const back=$('#reqmodal'), done=$('#reqdone');
   const open=()=>{ back.classList.add('on'); back.setAttribute('aria-hidden','false');
-    done.classList.remove('on'); setTimeout(()=>$('#req-topic').focus(),40); };
+    done.classList.remove('on'); done.classList.remove('err');
+    done.textContent='Thanks \u2014 your request has been sent.';
+    setTimeout(()=>$('#req-topic').focus(),40); };
   const close=()=>{ back.classList.remove('on'); back.setAttribute('aria-hidden','true'); };
   const ob=$('#reqopen'); if(ob) ob.addEventListener('click', open);
   const cb=$('#reqclose'); if(cb) cb.addEventListener('click', close);
   if(back) back.addEventListener('click', e=>{ if(e.target===back) close(); });
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
   const sb=$('#reqsubmit');
-  if(sb) sb.addEventListener('click', function(){
-    const topic=$('#req-topic').value.trim(), type=$('#req-type').value;
+  if(sb) sb.addEventListener('click', async function(){
+    const topic=$('#req-topic').value.trim(),
+          type=$('#req-type').value,
+          details=$('#req-details').value.trim();
     if(!topic || !type){
       if(!topic) $('#req-topic').style.borderColor='#e2504a';
       if(!type)  $('#req-type').style.borderColor='#e2504a';
       return;
     }
-    // stub: would send { topic, type, details } to the requests inbox
-    done.classList.add('on');
-    $('#req-topic').value=''; $('#req-type').value=''; $('#req-details').value='';
-    $('#req-topic').style.borderColor=''; $('#req-type').style.borderColor='';
-    setTimeout(close, 1400);
+    sb.disabled=true; const label=sb.innerHTML; sb.textContent='Sending...';
+    const showDone=(msg,isErr)=>{
+      done.textContent=msg; done.classList.add('on');
+      done.classList.toggle('err', !!isErr);
+    };
+    try{
+      const res=await fetch('https://api.web3forms.com/submit',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject: 'Monitor request: '+type+' \u2014 '+topic,
+          from_name: 'BTC Cycle Monitor',
+          topic: topic, type: type, details: details || '(none)',
+        }),
+      });
+      const out=await res.json().catch(()=>({}));
+      if(res.ok && out.success){
+        showDone('Thanks \u2014 your request has been sent.', false);
+        $('#req-topic').value=''; $('#req-type').value=''; $('#req-details').value='';
+        $('#req-topic').style.borderColor=''; $('#req-type').style.borderColor='';
+        setTimeout(close, 1400);
+      } else {
+        showDone('Could not send \u2014 please email requests@joeconsorti.com.', true);
+      }
+    } catch(e){
+      showDone('Could not send \u2014 please email requests@joeconsorti.com.', true);
+    } finally {
+      sb.disabled=false; sb.innerHTML=label;
+    }
   });
   ['#req-topic','#req-type'].forEach(s=>{ const el=$(s);
     if(el) el.addEventListener('input', ()=>{ el.style.borderColor=''; }); });
