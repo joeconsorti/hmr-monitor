@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bitcoin Cycle Monitor — The Hard Money Room</title>
+<title>[DESIGN] Bitcoin Cycle Monitor — The Hard Money Room</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root{
@@ -37,10 +37,11 @@
   nav button.on{color:var(--teal);border-bottom-color:var(--teal)}
   nav button:hover{color:var(--mut)}
 
-  .tape{background:var(--panel2);border-bottom:1px solid var(--line);overflow:hidden;
-        position:sticky;top:57px;z-index:25;height:34px;white-space:nowrap}
+  .tape{background:var(--panel2);border-top:1px solid var(--line);overflow:hidden;
+        height:34px;white-space:nowrap}
   .tape-track{display:inline-flex;align-items:center;height:34px;will-change:transform;
               animation:scroll 90s linear infinite}
+  .tape:hover .tape-track{animation-play-state:paused}
   @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   .ti{display:inline-flex;align-items:center;gap:7px;padding:0 18px;font-size:11px;
       border-right:1px solid var(--line2)}
@@ -93,6 +94,7 @@
   .clock div{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:10px}
   .clock .k{color:var(--mut2);font-size:8px;letter-spacing:1px}
   .clock .v{font-size:16px;margin-top:3px}
+  .clock .ck-sub{font-size:8.5px;color:var(--mut3);margin-top:6px;letter-spacing:.5px}
 
   .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:14px 0;
          border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -134,6 +136,9 @@
   .miniplot{width:100%;height:90px}
   .leg{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 0;font-size:9.5px;color:var(--mut2)}
   .leg span{display:inline-flex;align-items:center;gap:6px}
+  .leg .legtog{cursor:pointer;padding:2px 6px;border-radius:4px;user-select:none}
+  .leg .legtog:hover{background:var(--line2)}
+  .leg .legtog.off{opacity:.4;text-decoration:line-through}
   .leg i{width:14px;height:2px;display:inline-block;border-radius:2px}
 
   .vids{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
@@ -182,8 +187,47 @@
     .vids{grid-template-columns:1fr}
     .big{font-size:60px}
     .glabels{font-size:7px}
-    .tape{top:82px}
+
   }
+  /* Request button + modal */
+  .reqbtn{display:inline-flex;align-items:center;gap:6px;
+    background:var(--orange);color:#150a02;border:none;border-radius:7px;
+    padding:7px 13px;font:inherit;font-size:11px;font-weight:600;letter-spacing:.5px;
+    cursor:pointer;white-space:nowrap}
+  .reqbtn:hover{filter:brightness(1.08)}
+  .reqbtn svg{display:block}
+  .modal-back{position:fixed;inset:0;background:rgba(4,7,11,0.72);backdrop-filter:blur(3px);
+    display:none;align-items:flex-start;justify-content:center;z-index:200;
+    padding:60px 18px;overflow-y:auto}
+  .modal-back.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;max-width:540px;padding:26px 26px 22px;position:relative;
+    box-shadow:0 24px 60px rgba(0,0,0,.55)}
+  .modal-x{position:absolute;top:16px;right:18px;background:none;border:none;
+    color:var(--mut2);font-size:22px;line-height:1;cursor:pointer}
+  .modal-x:hover{color:var(--txt)}
+  .modal-h{font-size:19px;font-weight:600;margin:0 0 4px;color:var(--txt);letter-spacing:0}
+  .modal-sub{font-size:12.5px;color:var(--mut2);margin:0 0 20px;line-height:1.5}
+  .req-field{margin-bottom:15px}
+  .req-field label{display:block;font-size:9.5px;letter-spacing:2px;color:var(--mut2);
+    margin-bottom:7px}
+  .req-field input,.req-field select,.req-field textarea{width:100%;box-sizing:border-box;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    color:var(--txt);font:inherit;font-size:13px;padding:10px 12px;outline:none}
+  .req-field input:focus,.req-field select:focus,.req-field textarea:focus{border-color:var(--orange)}
+  .req-field textarea{resize:vertical;min-height:84px}
+  .req-field select{appearance:none;cursor:pointer}
+  .req-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:20px}
+  .req-email{font-size:11.5px;color:var(--mut2)}
+  .req-email b{color:var(--mut);font-weight:500}
+  .req-submit{display:inline-flex;align-items:center;gap:7px;background:var(--orange);
+    color:#150a02;border:none;border-radius:8px;padding:10px 18px;font:inherit;
+    font-size:12.5px;font-weight:600;cursor:pointer}
+  .req-submit:hover{filter:brightness(1.08)}
+  .req-done{display:none;margin-top:16px;padding:11px 14px;border-radius:8px;
+    background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);
+    color:#2dd4bf;font-size:12.5px}
+  .req-done.on{display:block}
 </style>
 </head>
 <body>
@@ -201,10 +245,47 @@
       <button data-p="onchain">ON-CHAIN</button>
       <button data-p="mining">MINING</button>
     </nav>
+    <button class="reqbtn" id="reqopen" title="Submit a request">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      <span>Request</span>
+    </button>
   </div>
+  <div class="tape"><div class="tape-track" id="tape"></div></div>
 </header>
 
-<div class="tape"><div class="tape-track" id="tape"></div></div>
+<div class="modal-back" id="reqmodal" aria-hidden="true">
+  <div class="modal" role="dialog" aria-label="Submit a request">
+    <button class="modal-x" id="reqclose" title="Close">&times;</button>
+    <h2 class="modal-h">Submit a Request</h2>
+    <p class="modal-sub">Have a chart you want added, an idea, or a question? Send it straight to me.</p>
+    <div class="req-field">
+      <label>TOPIC</label>
+      <input type="text" id="req-topic" placeholder="Enter your topic here" maxlength="120">
+    </div>
+    <div class="req-field">
+      <label>TYPE</label>
+      <select id="req-type">
+        <option value="">Select type</option>
+        <option>Chart request</option>
+        <option>Feature idea</option>
+        <option>Bug</option>
+        <option>Question</option>
+      </select>
+    </div>
+    <div class="req-field">
+      <label>DETAILS</label>
+      <textarea id="req-details" rows="4" placeholder="Add any extra context, requirements, or questions..."></textarea>
+    </div>
+    <div class="req-foot">
+      <span class="req-email">or email <b>requests@joeconsorti.com</b></span>
+      <button class="req-submit" id="reqsubmit">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Submit
+      </button>
+    </div>
+    <div class="req-done" id="reqdone">Thanks \u2014 your request has been sent.</div>
+  </div>
+</div>
 
 <div class="wrap">
   <div id="boot" class="loading">Loading Bitcoin Cycle Monitor…</div>
@@ -241,9 +322,10 @@
       <span>EUPHORIA</span><span>TOP/HARD SELL</span>
     </div>
 
-    <h2 class="sec">CYCLE CLOCK <small>where we are in calendar time</small></h2>
-    <div class="clock" id="clock"></div>
-    <div class="note" id="clocknote"></div>
+    <h2 class="sec">SCORE HISTORY <small>every top and bottom this framework has seen</small></h2>
+    <div class="ranges" id="histrange"></div>
+    <div id="histchart" class="lwchart" style="height:220px"></div>
+    <div class="note" id="histnote"></div>
 
     <h2 class="sec">KEY LEVELS <small>the prices that matter right now</small></h2>
     <div class="strip" id="strip"></div>
@@ -260,9 +342,9 @@
     <div id="pricechart" class="lwchart"></div>
     <div class="leg" id="pricelegend"></div>
 
-    <h2 class="sec">SCORE HISTORY <small>every top and bottom this framework has seen</small></h2>
-    <div id="histchart" class="lwchart" style="height:220px"></div>
-    <div class="note" id="histnote"></div>
+    <h2 class="sec">CYCLE CLOCK <small>where we are in calendar time</small></h2>
+    <div class="clock" id="clock"></div>
+    <div class="note" id="clocknote"></div>
 
     <h2 class="sec">KEY INDICATORS <small>the heaviest-weighted signals</small></h2>
     <div class="keyrow">
@@ -324,6 +406,18 @@
   </section>
 
   <section class="page" id="p-mining">
+    <h2 class="sec">HASH RATE <small>the total computing power securing the network</small></h2>
+    <div class="ranges" id="hrrange"></div>
+    <div id="hrchart" class="lwchart"></div>
+    <div class="note" id="hrnote"></div>
+
+    <h2 class="sec">NETWORK METRICS <small>the health of the mining network right now</small></h2>
+    <div class="clock" id="netmetrics"></div>
+
+    <h2 class="sec">HASH RIBBONS <small>when miners capitulate, bottoms follow</small></h2>
+    <div id="hribchart" class="lwchart"></div>
+    <div class="note" id="hribnote"></div>
+
     <h2 class="sec">MINER STRESS <small>the supply side of the market</small></h2>
     <div class="grid charts" id="mn-cards"></div>
     <div class="callout">
@@ -337,6 +431,7 @@
   <footer>
     <div class="fbrand"><b>The Hard Money Room</b> · Exclusive</div>
     <div class="fsub">A Joe Consorti Media LLC production · Educational only, not financial advice<br>
+      For full terms &amp; conditions, please visit <a href="https://www.joeconsorti.com/terms" target="_blank" rel="noopener">joeconsorti.com/terms</a><br>
       <span id="foot"></span></div>
     <div class="fstamp" id="stamp"></div>
   </footer>
@@ -399,7 +494,8 @@ function indicatorMiniChart(el, o){
 /* mode: 'hist' = real historical model curves, 'flat' = current level lines */
 let PRICE_MODE='hist', LEV_MODE='hist';
 let PRICE_SCALE='linear', LEV_SCALE='linear';
-let PRICE_RANGE='3Y', LEV_RANGE='3Y';
+let PRICE_RANGE='3Y', LEV_RANGE='3Y', HIST_RANGE='ALL', HR_RANGE='3Y';
+const LEV_OFF=new Set();   // cost-basis models toggled off on the Levels chart
 
 /* Range options, in days. ALL clamps to the earliest datapoint available, so a
    chart never renders empty space to the left of where the data begins. */
@@ -423,7 +519,10 @@ function rangeWindow(points, key){
 }
 
 /* Ranges of 1Y or shorter use the true-daily tail; longer ranges use the
-   downsampled full history. Keeps short windows at daily resolution. */
+   downsampled full history. Keeps short windows at daily resolution.
+   BUILD-TODO: for 1W and 1M, serve hourly price data instead of daily
+   (needs an hourly BRK/price series shipped as points_hourly). Design uses
+   daily as a stand-in until that source is wired. */
 const DAILY_RANGES={'1W':1,'1M':1,'3M':1,'6M':1,'1Y':1};
 function seriesFor(obj, key){
   if(!obj) return [];
@@ -489,20 +588,45 @@ function priceChart(){
   $('#pricelegend').innerHTML='<span><i style="background:#e6edf3"></i>BTC spot</span>'+leg.join('');
 }
 
+function histPoints(){
+  const h=DATA.score.history; if(!h||h.length<2) return [];
+  const stride=DATA.score.history_stride_days||7;
+  const end=new Date();
+  return h.map((v,i)=>{
+    const d=new Date(end.getTime()-(h.length-1-i)*stride*86400000);
+    return {t:d.toISOString().slice(0,10), v:v};
+  });
+}
 function histChart(){
   const el=$('#histchart'); const h=DATA.score.history; if(!el||!h||h.length<2) return;
   const c=makeChart(el, 220);
-  const stride=DATA.score.history_stride_days||7;
-  const end=new Date();
-  const pts=h.map((v,i)=>{
-    const d=new Date(end.getTime()-(h.length-1-i)*stride*86400000);
-    return {time:d.toISOString().slice(0,10), value:v};
+  const pts=histPoints();
+  const first=pts[0].t, last=pts[pts.length-1].t;
+
+  // Zone shading matching the CYCLE POSITION gauge. Area series fill from their
+  // line down to the baseline, so we paint highest band first and let each
+  // lower band overpaint it. Colors mirror the gauge segments.
+  const bands=[
+    [100,'rgba(58,26,18,0.55)'],   // 85-100 top / hard sell
+    [85, 'rgba(42,31,22,0.55)'],   // 65-85  euphoria
+    [65, 'rgba(28,31,38,0.55)'],   // 35-65  mid
+    [35, 'rgba(18,54,49,0.55)'],   // 15-35  accumulation
+    [15, 'rgba(15,43,40,0.65)'],   // 0-15   bottom / hard buy
+  ];
+  bands.forEach(function(b){
+    const a=c.addAreaSeries({
+      topColor:b[1], bottomColor:b[1], lineColor:'rgba(0,0,0,0)',
+      lineWidth:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+    });
+    a.setData([{time:first,value:b[0]},{time:last,value:b[0]}]);
   });
-  const s=c.addLineSeries({color:'#9aa4b0',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
-  s.setData(pts);
-  s.createPriceLine({price:85,color:'#e2504a',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'TOP 85'});
-  s.createPriceLine({price:15,color:'#2dd4bf',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'BOTTOM 15'});
-  c.timeScale().fitContent();
+
+  const s=c.addLineSeries({color:'#e6edf3',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
+  s.setData(pts.map(p=>({time:p.t,value:p.v})));
+  // boundary guides, no labels (labels overlapped the plot)
+  s.createPriceLine({price:85,color:'rgba(226,80,74,0.5)',lineWidth:1,lineStyle:2,axisLabelVisible:false});
+  s.createPriceLine({price:15,color:'rgba(45,212,191,0.5)',lineWidth:1,lineStyle:2,axisLabelVisible:false});
+  applyRange(c, pts, HIST_RANGE);
   const above=h.filter(x=>x>85).length, below=h.filter(x=>x<15).length;
   $('#histnote').textContent=
     'Above 85 marks cycle tops ('+above+' readings), below 15 marks bottoms ('+below+' readings). It is at '+DATA.score.composite+' today.';
@@ -524,6 +648,11 @@ function fgDial(){
     '<div class="rd">'+(o.read||'')+'</div>';
 }
 
+function legItem(k, col, label){
+  const off=LEV_OFF.has(k);
+  return '<span class="legtog'+(off?' off':'')+'" data-k="'+k+'" title="click to toggle">'+
+    '<i style="background:'+col+'"></i>'+label+'</span>';
+}
 function levelsChart(){
   const el=$('#levchart'); const ls=DATA.level_series; if(!el||!ls) return;
   const lv=DATA.levels;
@@ -534,28 +663,41 @@ function levelsChart(){
                 sth_realized:'#e0a838',realized:'#9aa4b0',lth_realized:'#e0873a',price:'#e6edf3'};
   const order=['price','vaulted','sma_350d','true_market_mean','realized','sth_realized','lth_realized'];
   const leg=[];
-  // price always draws as a real series so the axis has a time span in both modes
   const lpPts=seriesFor(ls.price, LEV_RANGE);
   if(ls.price){
-    const ps=c.addLineSeries({color:colors.price,lineWidth:2,priceLineVisible:false,lastValueVisible:true});
+    // price is always on (anchors the time axis); others honor LEV_OFF set
+    const priceOn = !LEV_OFF.has('price');
+    const ps=c.addLineSeries({color:priceOn?colors.price:'rgba(0,0,0,0)',lineWidth:2,
+                              priceLineVisible:false,lastValueVisible:priceOn});
     ps.setData(toLine(lpPts));
-    leg.push('<span><i style="background:'+colors.price+'"></i>'+ls.price.label+'</span>');
+    leg.push(legItem('price', colors.price, ls.price.label));
     order.forEach(function(k){
       if(k==='price'||!ls[k]) return;
       const col=colors[k]||'#9aa4b0';
-      const kp=seriesFor(ls[k], LEV_RANGE);
-      if(LEV_MODE==='hist' && kp.length){
-        const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
-        s2.setData(toLine(kp));
-      } else if(lv[k]!=null){
-        ps.createPriceLine({price:lv[k],color:col,lineWidth:1,lineStyle:2,
-                            axisLabelVisible:true,title:ls[k].label});
+      const on=!LEV_OFF.has(k);
+      if(on){
+        const kp=seriesFor(ls[k], LEV_RANGE);
+        if(LEV_MODE==='hist' && kp.length){
+          const s2=c.addLineSeries({color:col,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+          s2.setData(toLine(kp));
+        } else if(lv[k]!=null){
+          ps.createPriceLine({price:lv[k],color:col,lineWidth:1,lineStyle:2,
+                              axisLabelVisible:true,title:ls[k].label});
+        }
       }
-      leg.push('<span><i style="background:'+col+'"></i>'+ls[k].label+'</span>');
+      leg.push(legItem(k, col, ls[k].label));
     });
   }
   applyRange(c, lpPts, LEV_RANGE);
   $('#levlegend').innerHTML=leg.join('');
+  // clicking a legend entry toggles that model
+  $('#levlegend').querySelectorAll('[data-k]').forEach(function(elm){
+    elm.onclick=function(){
+      const k=elm.dataset.k;
+      if(LEV_OFF.has(k)) LEV_OFF.delete(k); else LEV_OFF.add(k);
+      rebuild('#levchart', levelsChart);
+    };
+  });
 }
 
 function card(o, opts){
@@ -650,11 +792,76 @@ function renderScore(){
 }
 function renderClock(){
   const ck=DATA.cycle_clock||{}, s=DATA.score;
+  const dsa=ck.days_since_ath;
+  // historical bottom timing, measured in days after the prior cycle ATH
+  const H2018=363, H2022=376;
+  const to18 = dsa!=null ? H2018-dsa : null;   // +n = n days until we reach 2018-analog timing
+  const to22 = dsa!=null ? H2022-dsa : null;
+  const fmtGap = n => n==null ? '\u2013'
+    : n>0 ? n+' days out' : n<0 ? Math.abs(n)+' days past' : 'today';
+  const gapCls = n => n==null ? '' : n>0 ? 'warm' : 'cool';
   $('#clock').innerHTML=
-    '<div><div class="k">DAYS SINCE ATH</div><div class="v">'+(ck.days_since_ath!=null?ck.days_since_ath:'\u2013')+'</div></div>'+
-    '<div><div class="k">ALL-TIME HIGH</div><div class="v">'+money(ck.ath)+'</div></div>'+
-    '<div><div class="k">SCORE 30D</div><div class="v">'+(s.delta_30d>=0?'+':'')+(s.delta_30d!=null?s.delta_30d:'\u2013')+'</div></div>';
-  $('#clocknote').textContent=ck.note||'';
+    '<div><div class="k">DAYS SINCE ATH</div><div class="v">'+(dsa!=null?dsa:'\u2013')+'</div>'+
+      '<div class="ck-sub">all-time high '+money(ck.ath)+'</div></div>'+
+    '<div><div class="k">2018 BOTTOM ANALOG</div><div class="v '+gapCls(to18)+'">'+fmtGap(to18)+'</div>'+
+      '<div class="ck-sub">that low printed '+H2018+' days after the high</div></div>'+
+    '<div><div class="k">2022 BOTTOM ANALOG</div><div class="v '+gapCls(to22)+'">'+fmtGap(to22)+'</div>'+
+      '<div class="ck-sub">that low printed '+H2022+' days after the high</div></div>';
+  $('#clocknote').textContent =
+    'Both prior cycles bottomed ~360-375 days after the ATH. "Out" means that analog window is still ahead; "past" means we have cleared it.';
+}
+
+/* ===== MINING PAGE =====
+   BUILD-TODO: hash rate + hash ribbons need a real source at build time.
+   BRK publishes hashrate; ribbons are its own 30-day and 60-day moving averages.
+   Design uses baked stand-in series (DATA.hashrate / DATA.network_metrics). */
+function hashRateChart(){
+  const el=$('#hrchart'); const hr=DATA.hashrate; if(!el||!hr||!hr.points) return;
+  const c=makeChart(el, 340);
+  const s=c.addLineSeries({color:'#e0873a',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
+  s.setData(toLine(hr.points));
+  applyRange(c, hr.points, HR_RANGE);
+  $('#hrnote').textContent=
+    'Hash rate is the total computing power miners point at the network. It has risen almost every year regardless of price, which is why a falling hash rate is such a rare and meaningful stress signal.';
+}
+function hashRibbonsChart(){
+  const el=$('#hribchart'); const hr=DATA.hashrate; if(!el||!hr||!hr.points) return;
+  const c=makeChart(el, 340);
+  const pts=hr.points;
+  // Prefer the real 30-day / 60-day averages shipped from the build. Fall back
+  // to a client-side moving average over the sampled series if absent.
+  let fastPts, slowPts;
+  if(hr.ribbons && hr.ribbons.fast && hr.ribbons.slow){
+    fastPts=toLine(hr.ribbons.fast); slowPts=toLine(hr.ribbons.slow);
+  } else {
+    const ma=(n)=>pts.map((p,i)=>{
+      const from=Math.max(0,i-n+1); const slice=pts.slice(from,i+1);
+      const avg=slice.reduce((a,b)=>a+b.v,0)/slice.length;
+      return {time:p.t, value:avg};
+    });
+    fastPts=ma(6); slowPts=ma(12);
+  }
+  const fast=c.addLineSeries({color:'#2dd4bf',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  fast.setData(fastPts);
+  const slow=c.addLineSeries({color:'#e2504a',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  slow.setData(slowPts);
+  applyRange(c, pts, HR_RANGE);
+  $('#hribnote').innerHTML=
+    'The <span class="cool">fast average</span> crossing below the <span style="color:#e2504a">slow average</span> marks miner capitulation \u2014 the weakest miners switching off. Historically, the recovery cross that follows has been one of the most reliable buy signals bitcoin has.';
+}
+function renderNetMetrics(){
+  const el=$('#netmetrics'); const nm=DATA.network_metrics; if(!el||!nm) return;
+  const arrow=v=>v>0?'\u25b2':v<0?'\u25bc':'';
+  const cls=v=>v>0?'cool':v<0?'down':'';
+  el.innerHTML=
+    '<div><div class="k">HASH RATE</div><div class="v">'+nm.hashrate+'</div>'+
+      '<div class="ck-sub">exahashes per second</div></div>'+
+    '<div><div class="k">LAST 90 DAYS</div><div class="v '+cls(nm.chg_90d)+'">'+arrow(nm.chg_90d)+' '+Math.abs(nm.chg_90d)+'%</div>'+
+      '<div class="ck-sub">change in network power</div></div>'+
+    '<div><div class="k">DIFFICULTY</div><div class="v">'+nm.difficulty+'</div>'+
+      '<div class="ck-sub">how hard blocks are to mine</div></div>'+
+    '<div><div class="k">MINER REVENUE</div><div class="v">'+nm.miner_rev+'</div>'+
+      '<div class="ck-sub">daily, in millions of dollars</div></div>';
 }
 function renderStrip(){
   const lv=DATA.levels;
@@ -688,7 +895,10 @@ function renderAll(){
   const prof=byPageGroup('onchain','profitability').sort((a,b)=>(b.featured?1:0)-(a.featured?1:0));
   renderCards('#oc-prof', prof, {chart:true});
   renderCards('#oc-coh', byPageGroup('onchain','cohort'), {chart:true});
-  renderCards('#mn-cards', Object.values(I).filter(v=>v.page==='mining'), {chart:true});
+  hashRateChart(); hashRibbonsChart(); renderNetMetrics();
+  // Puell then Thermocap, side by side in the small-chart grid
+  const mnOrder=['puell','thermocap'];
+  renderCards('#mn-cards', mnOrder.filter(k=>I[k]).map(k=>I[k]), {chart:true});
 
   const M=DATA.macro||{};
   $('#macro-money').innerHTML=['m2','dxy'].filter(k=>M[k]).map(k=>macroCard(M[k])).join('');
@@ -701,6 +911,12 @@ function renderAll(){
   });
   buildRangeBar('#levrange', LEV_RANGE, function(r){
     LEV_RANGE=r; rebuild('#levchart', levelsChart);
+  });
+  buildRangeBar('#histrange', HIST_RANGE, function(r){
+    HIST_RANGE=r; rebuild('#histchart', histChart);
+  });
+  buildRangeBar('#hrrange', HR_RANGE, function(r){
+    HR_RANGE=r; rebuild('#hrchart', hashRateChart); rebuild('#hribchart', hashRibbonsChart);
   });
 
   $('#foot').textContent='Data via '+(DATA.source||'BRK + FRED');
@@ -845,12 +1061,44 @@ if(_brand){
   _brand.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); showPage('monitor'); } });
 }
 
+/* Request modal. BUILD-TODO: on submit, POST to a small endpoint (or a
+   form service) that emails requests@joeconsorti.com, which auto-forwards
+   to the main inbox. Design just validates and shows the confirmation. */
+(function(){
+  const back=$('#reqmodal'), done=$('#reqdone');
+  const open=()=>{ back.classList.add('on'); back.setAttribute('aria-hidden','false');
+    done.classList.remove('on'); setTimeout(()=>$('#req-topic').focus(),40); };
+  const close=()=>{ back.classList.remove('on'); back.setAttribute('aria-hidden','true'); };
+  const ob=$('#reqopen'); if(ob) ob.addEventListener('click', open);
+  const cb=$('#reqclose'); if(cb) cb.addEventListener('click', close);
+  if(back) back.addEventListener('click', e=>{ if(e.target===back) close(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
+  const sb=$('#reqsubmit');
+  if(sb) sb.addEventListener('click', function(){
+    const topic=$('#req-topic').value.trim(), type=$('#req-type').value;
+    if(!topic || !type){
+      if(!topic) $('#req-topic').style.borderColor='#e2504a';
+      if(!type)  $('#req-type').style.borderColor='#e2504a';
+      return;
+    }
+    // stub: would send { topic, type, details } to the requests inbox
+    done.classList.add('on');
+    $('#req-topic').value=''; $('#req-type').value=''; $('#req-details').value='';
+    $('#req-topic').style.borderColor=''; $('#req-type').style.borderColor='';
+    setTimeout(close, 1400);
+  });
+  ['#req-topic','#req-type'].forEach(s=>{ const el=$(s);
+    if(el) el.addEventListener('input', ()=>{ el.style.borderColor=''; }); });
+})();
+
 function resizeCharts(){
   charts.forEach(h=>{ try{ h.c.resize(h.el.clientWidth, h.h); }catch(e){} });
 }
 window.addEventListener('resize', ()=>{ clearTimeout(window._rz); window._rz=setTimeout(resizeCharts,150); });
 
 setInterval(()=>{ const el=$('#tapeclock'); if(el) el.textContent=estClock(); }, 1000);
+
+/* ===== DESIGN SANDBOX: hardcoded data, no network, no polling ===== */
 
 fetch('monitor.json?t='+Date.now())
   .then(r=>r.json())
@@ -864,6 +1112,7 @@ fetch('monitor.json?t='+Date.now())
     setInterval(pollFull, 5*60*1000);
   })
   .catch(e=>{ $('#boot').textContent='Could not load monitor.json \u2014 '+e.message; });
+
 </script>
 </body>
 </html>
