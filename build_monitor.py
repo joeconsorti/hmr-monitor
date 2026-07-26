@@ -216,19 +216,109 @@ def fetch_fred(series_id):
         return [], []
 
 
-def fetch_gold():
-    """Spot gold (COMEX front-month) daily closes. Free, no API key.
-    Returns a list of closes, oldest first, or [] if unavailable."""
+def fetch_yahoo(symbol, rng="2y", interval="1d"):
+    """Daily closes for a Yahoo Finance symbol, oldest first, [] on failure.
+    Free, no API key. Used for gold and the cross-asset watchlist tickers."""
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+           f"{symbol}?range={rng}&interval={interval}")
     try:
-        r = requests.get(GOLD_URL, timeout=TIMEOUT,
+        r = requests.get(url, timeout=TIMEOUT,
                          headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         res = r.json()["chart"]["result"][0]
         closes = res["indicators"]["quote"][0]["close"]
         return [c for c in closes if isinstance(c, (int, float))]
     except Exception as e:
-        print(f"  ! gold: {e}", file=sys.stderr)
+        print(f"  ! yahoo {symbol}: {e}", file=sys.stderr)
         return []
+
+
+def fetch_gold():
+    """Spot gold (COMEX front-month) daily closes. Free, no API key.
+    Returns a list of closes, oldest first, or [] if unavailable."""
+    return fetch_yahoo("GC=F", rng="2y", interval="1d")
+
+
+# Cross-asset tickers shown under BTC and gold on the macro page.
+# Yahoo symbols: ^GSPC=S&P 500, ^IXIC=Nasdaq, ^MOVE=MOVE index (bond vol),
+# BZ=F=Brent crude front-month, HG=F=COMEX copper.
+WATCH_YAHOO = [
+    ("S&P 500",     "^GSPC", 2),
+    ("NASDAQ",      "^IXIC", 2),
+    ("MOVE INDEX",  "^MOVE", 2),
+    ("BRENT CRUDE", "BZ=F",  2),
+    ("COPPER",      "HG=F",  2),
+]
+
+
+def fetch_hashrate(days=HISTORY_DAYS):
+    """Network hash rate history from BRK, plus companion network-health reads.
+    Returns (points, ribbons, network_metrics) or ([], {}, {}) on failure.
+
+    Series confirmed against the BRK catalog:
+      hash_rate            — network hash rate in H/s
+      hash_rate_sma_1m     — 30-day average (hash-ribbons fast line)
+      hash_rate_sma_2m     — 60-day average (hash-ribbons slow line)
+      difficulty           — current mining difficulty
+      subsidy_sum_24h_usd  — daily block-subsidy value in USD
+      fees_sum_24h_usd     — daily fee value in USD
+    Miner revenue = subsidy + fees.
+    """
+    vals = fetch_series("hash_rate", days)
+    if not vals:
+        return [], {}, {}
+    dates = fetch_dates(days)
+    n = min(len(dates), len(vals))
+    dates, vals = dates[-n:], vals[-n:]
+    scale = 1e18                       # H/s -> EH/s
+    eh = [v / scale for v in vals]
+    points = dated_downsample(dates, eh, target=420)
+
+    # Real hash ribbons: BRK's own 30-day and 60-day moving averages.
+    ribbons = {}
+    fast = fetch_series("hash_rate_sma_1m", days)
+    slow = fetch_series("hash_rate_sma_2m", days)
+    if fast and slow:
+        m = min(len(dates), len(fast), len(slow))
+        ribbons = {
+            "fast": dated_downsample(dates[-m:], [x / scale for x in fast[-m:]], target=420),
+            "slow": dated_downsample(dates[-m:], [x / scale for x in slow[-m:]], target=420),
+        }
+
+    latest = eh[-1] if eh else None
+    chg_90d = pct_change(eh, 90)
+    difficulty = _series_last("difficulty", days)
+    subsidy_usd = _series_last("subsidy_sum_24h_usd", days)
+    fees_usd = _series_last("fees_sum_24h_usd", days)
+    miner_rev = None
+    if subsidy_usd is not None:
+        miner_rev = subsidy_usd + (fees_usd or 0)
+
+    metrics = {
+        "hashrate": f"{latest:,.0f}" if latest is not None else "\u2013",
+        "chg_90d": chg_90d if chg_90d is not None else 0,
+        "difficulty": _fmt_big(difficulty) if difficulty is not None else "\u2013",
+        "miner_rev": f"${miner_rev/1e6:,.1f}" if miner_rev else "\u2013",
+    }
+    return points, ribbons, metrics
+
+
+def _series_last(name, days=HISTORY_DAYS):
+    """Last numeric value of a BRK series, or None."""
+    v = fetch_series(name, days)
+    return v[-1] if v else None
+
+
+def _fmt_big(n):
+    """Compact human formatting for large network numbers (142.6 T etc.)."""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return "\u2013"
+    for div, suf in ((1e12, " T"), (1e9, " B"), (1e6, " M"), (1e3, " K")):
+        if abs(n) >= div:
+            return f"{n/div:,.1f}{suf}"
+    return f"{n:,.0f}"
 
 
 def _dur_to_seconds(txt):
@@ -649,6 +739,18 @@ def build():
                 "note": "2018 low = ATH+363d · 2022 low = ATH+376d",
             }
 
+    # ---- mining: hash rate + network metrics -------------------------------
+    print("Fetching hash rate...")
+    hr_points, hr_ribbons, net_metrics = fetch_hashrate()
+    if hr_points:
+        out["hashrate"] = {"label": "Hash Rate", "unit": "EH/s", "points": hr_points}
+        if hr_ribbons:
+            out["hashrate"]["ribbons"] = hr_ribbons
+        out["network_metrics"] = net_metrics
+        print(f"  ok hash rate  {net_metrics.get('hashrate')} EH/s")
+    else:
+        print("  ! hash rate unavailable — mining charts will stay empty")
+
     # ---- Fear & Greed (scored, sentiment leg) ------------------------------
     print("Fetching Fear & Greed...")
     fng_hist, fng_class = fetch_fear_greed()
@@ -725,6 +827,31 @@ def build():
                           "d30": pct_change(gold, 21),
                           "ytd": pct_change(gold, 252)})
         print(f"  ok GOLD       {round(gold[-1], 2)}")
+
+    # Equity indices, bond-vol, and commodities via Yahoo (free, no key).
+    print("Fetching cross-asset watchlist...")
+    for label, sym, _ in WATCH_YAHOO:
+        series = fetch_yahoo(sym)
+        if series:
+            watchlist.append({"ticker": label, "price": round(series[-1], 2),
+                              "d30": pct_change(series, 21),
+                              "ytd": pct_change(series, 252)})
+            print(f"  ok {label:12} {round(series[-1], 2)}")
+
+    # BTC priced in gold — the ratio the audience actually trades. Derived from
+    # the two series we already fetched, so no extra request.
+    if spot and gold:
+        ratio = [ (p / g) for p, g in
+                  zip([v for v in levels_raw.get("price", []) if isinstance(v, (int, float))][-len(gold):],
+                      gold) ] if "price" in levels_raw else []
+        cur_ratio = round(spot / gold[-1], 2)
+        watchlist.append({
+            "ticker": "BTC / GOLD",
+            "price": cur_ratio,
+            "d30": pct_change(ratio, 21) if len(ratio) > 21 else 0,
+            "ytd": pct_change(ratio, 252) if len(ratio) > 252 else 0,
+        })
+        print(f"  ok BTC / GOLD  {cur_ratio}")
 
     for key, tick in (("dxy", "DXY"), ("us10y", "US 10Y"), ("us2y", "US 2Y")):
         if key in macro:
