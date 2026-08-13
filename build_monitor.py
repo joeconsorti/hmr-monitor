@@ -93,6 +93,17 @@ INDICATORS = {
         "weight": 1.0, "page": "onchain", "group": "profitability", "unit": "%",
         "read": "Share of coins worth more than their last move price. Under 60% is where weak hands finish selling.",
     },
+    # STH Realized-Cap Share is DISPLAY-ONLY (weight 0). It is a derived series:
+    # short-term-holder realized cap as a percent of total realized cap. It falls
+    # as coins age out of speculation into strong hands. A multi-year low means
+    # supply has moved into long-term hands. Shown as a cohort read, not scored,
+    # because it trends structurally and would skew the composite.
+    "sth_realized_share": {
+        "derived": ("sth_realized_cap", "realized_cap"), "label": "STH Realized-Cap Share",
+        "direction": "high_is_top", "weight": 0.0, "page": "onchain", "group": "cohort",
+        "unit": "%", "display_only": True,
+        "read": "The share of network value held in coins that moved in the last five months. When it falls to multi-year lows, speculation has left and supply has aged into strong hands. That is what accumulation looks like on-chain.",
+    },
     # Drawdown is DISPLAY-ONLY (weight 0). Percentile-ranking a drawdown does not
     # map cleanly onto cycle position — the asset spends most of its life well off
     # the highs, so the rank is dominated by that. Shown as context, never scored.
@@ -599,6 +610,23 @@ def build():
     print("Fetching indicator series...")
     raw = {}
     for key, cfg in INDICATORS.items():
+        if "derived" in cfg:
+            # derived indicator: numerator / denominator * 100 (a share series)
+            num_name, den_name = cfg["derived"]
+            num = fetch_series(num_name)
+            den = fetch_series(den_name)
+            if num and den:
+                n = min(len(num), len(den))
+                share = []
+                for a, b in zip(num[-n:], den[-n:]):
+                    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b:
+                        share.append(round(a / b * 100, 3))
+                    else:
+                        share.append(None)
+                if share:
+                    raw[key] = share
+                    print(f"  ok {key:28} {len(share)} pts (derived)")
+            continue
         data = fetch_series(cfg["series"])
         if data:
             raw[key] = data
@@ -699,6 +727,17 @@ def build():
             wt += w
         if wt:
             history_scores.append(round(ws / wt, 1))
+
+    # Ensure the history chart's final point matches today's headline composite
+    # exactly. The historical loop ranks each day against only the data available
+    # up to that day and samples weekly, so its last point can sit a few days
+    # stale and a fraction off. Pinning the final point to the live composite
+    # keeps the chart endpoint and the big number in agreement (a member flagged
+    # the mismatch — this removes it).
+    if history_scores:
+        history_scores[-1] = float(composite)
+    else:
+        history_scores = [float(composite)]
 
     out["score"] = {
         "composite": composite,
@@ -842,6 +881,10 @@ def build():
         out["score"]["regime"] = regime
         out["score"]["verdict"] = verdict
         out["score"]["in_bottom_quartile"] = bottom_quartile
+        # F&G folds into the composite after the history was built above, so
+        # re-pin the final history point to this final composite.
+        if out["score"].get("history"):
+            out["score"]["history"][-1] = float(composite)
         out["score"]["total_indicators"] = sum(
             1 for v in indicators.values() if v["weight"] > 0)
         out["score"]["total_displayed"] = len(indicators)
@@ -948,7 +991,11 @@ def build():
             "weight": cfg.get("weight", 1.0),
             "unit": cfg.get("unit", ""),
         }
-        live_series[key] = cfg["series"]
+        # derived indicators can't be re-fetched as one browser-side series;
+        # they're display-only (weight 0) so they never affect the live
+        # composite. Only map plainly-fetchable series for live recompute.
+        if "series" in cfg:
+            live_series[key] = cfg["series"]
 
     # Fear & Greed distribution (scored; alternative.me is also CORS-open).
     if "fear_greed" in indicators and fng_hist:
