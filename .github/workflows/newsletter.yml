@@ -1,0 +1,84 @@
+name: The Bitcoin Brief
+
+# 7:00 AM ET. GitHub cron is UTC and does not observe DST, so we run two
+# schedules: 11:00 UTC (= 7 AM EDT, summer) and 12:00 UTC (= 7 AM EST, winter).
+# The guard step makes sure only the correct one proceeds, so the brief sends
+# once at 7 AM local regardless of season.
+#
+# This workflow lives in the SAME repo as the monitor (hmr-monitor). The
+# newsletter code is in the newsletter/ subfolder. Charts are written into
+# newsletter/charts/<date>/ and committed back to this repo, which serves them
+# free via GitHub Pages at monitor.joeconsorti.com/newsletter/charts/<date>/.
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 7 AM Eastern during EDT (Mar-Nov)
+    - cron: "0 12 * * *"   # 7 AM Eastern during EST (Nov-Mar)
+  workflow_dispatch:        # allow manual "run now" from the Actions tab
+
+permissions:
+  contents: write           # needed so the job can commit the charts back
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard against the wrong DST schedule
+        id: guard
+        run: |
+          HOUR=$(TZ="America/New_York" date +%H)
+          echo "Eastern hour is $HOUR"
+          if [ "$HOUR" = "07" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            echo "Not 7 AM Eastern right now; skipping this run."
+          fi
+
+      - name: Set up Python
+        if: steps.guard.outputs.proceed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.guard.outputs.proceed == 'true'
+        run: pip install -r newsletter/requirements.txt
+
+      - name: Build and send the morning brief
+        if: steps.guard.outputs.proceed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
+          BEEHIIV_PUB_ID: ${{ secrets.BEEHIIV_PUB_ID }}
+          MONITOR_REPO_DIR: ${{ github.workspace }}
+          PAGES_BASE_URL: https://monitor.joeconsorti.com
+          # SAFETY: while this is "1", every issue lands as a Beehiiv DRAFT and
+          # NEVER emails your list. Review a few drafts in Beehiiv, then delete
+          # this line (or set to "0") to go fully live.
+          DRAFT_ONLY: "1"
+        run: |
+          cd newsletter
+          python build_newsletter.py
+
+      - name: Commit the day's charts for Pages hosting
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          git config user.name  "hmr-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add newsletter/charts/ || true
+          if ! git diff --cached --quiet; then
+            git commit -m "newsletter: chart images $(date -u +%F)"
+            git push
+          else
+            echo "No new charts to commit."
+          fi
+
+      - name: Upload preview artifact
+        if: steps.guard.outputs.proceed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: newsletter-preview
+          path: newsletter/out/preview.html
+          retention-days: 7
