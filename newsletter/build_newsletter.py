@@ -18,6 +18,7 @@ import sys
 import json
 import datetime
 import urllib.request
+import urllib.error
 
 import collect_data
 import chart_select as selector
@@ -55,9 +56,17 @@ def send_beehiiv(html, subject, as_draft):
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            resp = json.loads(r.read())
+            raw = r.read()
+            print(f"  [diag] Beehiiv status: {r.status}  body ({len(raw)} bytes): {raw[:2000]!r}")
+            resp = json.loads(raw)
         print(f"  ok Beehiiv: {'DRAFT created' if as_draft else 'SENT'} (post {resp.get('data',{}).get('id','?')})")
         return resp
+    except urllib.error.HTTPError as e:
+        body = e.read()
+        print(f"  ! Beehiiv send failed: HTTP {e.code} {e.reason}")
+        print(f"  [diag] Beehiiv error headers: {dict(e.headers)}")
+        print(f"  [diag] Beehiiv error body ({len(body)} bytes): {body[:2000]!r}")
+        return None
     except Exception as e:
         print(f"  ! Beehiiv send failed: {e}")
         return None
@@ -67,6 +76,12 @@ def main():
     dry = "--dry-run" in sys.argv
     weekend = is_weekend()
     os.makedirs(OUTDIR, exist_ok=True)
+
+    # DIAGNOSTIC: confirm the secrets are actually reaching the process (not
+    # the values — just lengths). A length of 0 means the env var never made
+    # it in, which would explain every downstream auth failure.
+    for name in ("ANTHROPIC_API_KEY", "BEEHIIV_API_KEY", "BEEHIIV_PUB_ID"):
+        print(f"     {name} length: {len(os.environ.get(name, ''))}")
 
     print("1/6 collecting data...")
     data = collect_data.collect()
