@@ -11,7 +11,6 @@ every future issue reads. This module only assembles the request.
 import os
 import json
 import urllib.request
-import urllib.error
 
 MODEL = "claude-sonnet-5"          # fast + cheap for daily prose; swap freely
 VOICE_FILE = os.path.join(os.path.dirname(__file__), "voice_prompt.md")
@@ -92,17 +91,8 @@ def _call_claude(api_key, system, user):
         headers={"content-type": "application/json", "x-api-key": api_key,
                  "anthropic-version": "2023-06-01"},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=90) as r:
-            raw = r.read()
-            print(f"  [diag] Claude status: {r.status}  body ({len(raw)} bytes): {raw[:2000]!r}")
-            body = json.loads(raw)
-    except urllib.error.HTTPError as e:
-        err_body = e.read()
-        print(f"  [diag] Claude error: HTTP {e.code} {e.reason}")
-        print(f"  [diag] Claude error headers: {dict(e.headers)}")
-        print(f"  [diag] Claude error body ({len(err_body)} bytes): {err_body[:2000]!r}")
-        raise
+    with urllib.request.urlopen(req, timeout=90) as r:
+        body = json.loads(r.read())
     return "".join(b.get("text", "") for b in body.get("content", []) if b.get("type") == "text")
 
 
