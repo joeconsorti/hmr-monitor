@@ -16,6 +16,34 @@ import urllib.error
 MODEL = "claude-sonnet-5"          # fast + cheap for daily prose; swap freely
 VOICE_FILE = os.path.join(os.path.dirname(__file__), "voice_prompt.md")
 
+# Structured outputs schema. chart_reads is an array (not an object keyed by
+# label) because json_schema mode requires additionalProperties: false, which
+# rules out dynamic keys -- write() converts it back to a label -> read dict
+# to match what assemble_html.py expects.
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "tldr": {"type": "string"},
+        "chart_reads": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "read": {"type": "string"},
+                },
+                "required": ["label", "read"],
+                "additionalProperties": False,
+            },
+        },
+        "what_to_watch": {"type": "string"},
+        "takeaway": {"type": "string"},
+    },
+    "required": ["headline", "tldr", "chart_reads", "what_to_watch", "takeaway"],
+    "additionalProperties": False,
+}
+
 
 def _load_voice():
     try:
@@ -58,6 +86,7 @@ def _call_claude(api_key, system, user):
         data=json.dumps({
             "model": MODEL, "max_tokens": 4096, "system": system,
             "thinking": {"type": "disabled"},
+            "output_config": {"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
             "messages": [{"role": "user", "content": user}],
         }).encode(),
         headers={"content-type": "application/json", "x-api-key": api_key,
@@ -87,18 +116,15 @@ def write(data, selected, dry_run=False):
     if dry_run or not api_key:
         return _template_fallback(data, selected, facts)
 
-    system = (voice + "\n\nReturn ONLY valid JSON with keys: headline, tldr, "
-              "chart_reads (object keyed by the chart label, each a 2-3 paragraph string), "
-              "what_to_watch, takeaway. No markdown, no preamble.")
+    system = (voice + "\n\nWrite the daily Bitcoin newsletter content: a headline, "
+              "a tldr, a 2-3 paragraph read for each chart, what to watch, and a takeaway.")
     user = (f"Today's data:\n{facts}\n\nWrite the morning brief. chart_reads must include "
             f"one entry for each of these labels: {[s['label'] for s in selected]}.")
     try:
         raw = _call_claude(api_key, system, user).strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`").split("\n", 1)[1] if "\n" in raw else raw
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        parsed["chart_reads"] = {r["label"]: r["read"] for r in parsed["chart_reads"]}
+        return parsed
     except Exception as e:
         print(f"  ! Claude API failed ({e}); using template fallback")
         return _template_fallback(data, selected, facts)
