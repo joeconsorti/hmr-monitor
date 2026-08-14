@@ -56,7 +56,8 @@ def _call_claude(api_key, system, user):
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=json.dumps({
-            "model": MODEL, "max_tokens": 2000, "system": system,
+            "model": MODEL, "max_tokens": 4096, "system": system,
+            "thinking": {"type": "disabled"},
             "messages": [{"role": "user", "content": user}],
         }).encode(),
         headers={"content-type": "application/json", "x-api-key": api_key,
