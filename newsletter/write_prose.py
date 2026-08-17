@@ -12,34 +12,32 @@ import os
 import json
 import urllib.request
 
+from chart_select import MACRO_LABELS
+
 MODEL = "claude-sonnet-5"          # fast + cheap for daily prose; swap freely
 VOICE_FILE = os.path.join(os.path.dirname(__file__), "voice_prompt.md")
 
-# Structured outputs schema. chart_reads is an array (not an object keyed by
-# label) because json_schema mode requires additionalProperties: false, which
-# rules out dynamic keys -- write() converts it back to a label -> read dict
-# to match what assemble_html.py expects.
+# Structured outputs schema. The brief opens on THE MACRO (macro_headline +
+# macro_paragraphs) and narrows into THE PAYOFF (bitcoin_headline +
+# bitcoin_paragraphs) as the causal result -- see voice_prompt.md's STRUCTURE
+# section. *_paragraphs are arrays so assemble_html.py can interleave a chart
+# image after each one without re-splitting a block of text.
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
         "headline": {"type": "string"},
         "tldr": {"type": "string"},
-        "chart_reads": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string"},
-                    "read": {"type": "string"},
-                },
-                "required": ["label", "read"],
-                "additionalProperties": False,
-            },
-        },
-        "what_to_watch": {"type": "string"},
+        "macro_headline": {"type": "string"},
+        "macro_paragraphs": {"type": "array", "items": {"type": "string"}},
+        "bitcoin_headline": {"type": "string"},
+        "bitcoin_paragraphs": {"type": "array", "items": {"type": "string"}},
+        "watch_macro": {"type": "string"},
+        "watch_price": {"type": "string"},
         "takeaway": {"type": "string"},
     },
-    "required": ["headline", "tldr", "chart_reads", "what_to_watch", "takeaway"],
+    "required": ["headline", "tldr", "macro_headline", "macro_paragraphs",
+                 "bitcoin_headline", "bitcoin_paragraphs", "watch_macro",
+                 "watch_price", "takeaway"],
     "additionalProperties": False,
 }
 
@@ -106,15 +104,25 @@ def write(data, selected, dry_run=False):
     if dry_run or not api_key:
         return _template_fallback(data, selected, facts)
 
-    system = (voice + "\n\nWrite the daily Bitcoin newsletter content: a headline, "
-              "a tldr, a 2-3 paragraph read for each chart, what to watch, and a takeaway.")
-    user = (f"Today's data:\n{facts}\n\nWrite the morning brief. chart_reads must include "
-            f"one entry for each of these labels: {[s['label'] for s in selected]}.")
+    macro_labels = [s["label"] for s in selected if s["label"] in MACRO_LABELS]
+    bitcoin_labels = [s["label"] for s in selected if s["label"] not in MACRO_LABELS]
+
+    system = (voice + "\n\nWrite the daily Bitcoin newsletter content, macro-first: a headline, "
+              "a tldr, THE MACRO section (macro_headline + macro_paragraphs), THE PAYOFF section "
+              "(bitcoin_headline + bitcoin_paragraphs) that resolves the macro story into Bitcoin "
+              "as its causal payoff, what to watch (a macro catalyst, then a price level), and a "
+              "takeaway.")
+    user = (f"Today's data:\n{facts}\n\n"
+            f"Macro charts selected today (each gets its own paragraph in THE MACRO section): "
+            f"{macro_labels or 'none'}\n"
+            f"Bitcoin/on-chain charts selected today (each gets its own paragraph in THE PAYOFF "
+            f"section): {bitcoin_labels}\n\n"
+            f"Write macro_paragraphs with at least {max(len(macro_labels), 2)} paragraphs "
+            f"(even with no macro chart selected, still open on the macro backdrop) and "
+            f"bitcoin_paragraphs with at least {max(len(bitcoin_labels), 1)} paragraphs.")
     try:
         raw = _call_claude(api_key, system, user).strip()
-        parsed = json.loads(raw)
-        parsed["chart_reads"] = {r["label"]: r["read"] for r in parsed["chart_reads"]}
-        return parsed
+        return json.loads(raw)
     except Exception as e:
         print(f"  ! Claude API failed ({e}); using template fallback")
         return _template_fallback(data, selected, facts)
@@ -123,12 +131,9 @@ def write(data, selected, dry_run=False):
 def _template_fallback(data, selected, facts):
     """Deterministic, editable draft. Real voice comes from the API in prod,
     but this proves the pipeline end-to-end with zero keys."""
-    oc = data.get("onchain", {})
-    price = oc.get("price")
     comp = data.get("composite")
     regime = data.get("regime", "")
     verdict = data.get("verdict", "")
-    reads = {}
     human = {
         "price_vs_levels": "Price against what holders actually paid. The whole game is where we sit relative to cost basis.",
         "sth_mvrv": "Short-term holders as a group. Below 1.0 means recent buyers are underwater.",
@@ -144,18 +149,31 @@ def _template_fallback(data, selected, facts):
         "sth_share": "The share of network value in coins that moved recently. Falling to multi-year lows means supply has aged into strong hands.",
         "supply_in_profit": "The share of coins worth more than they last moved at. Under 60% is where weak hands finish selling.",
     }
-    for s in selected:
-        reads[s["label"]] = human.get(s["key"], "Key read for today.") + \
-            "  [Live prose is written by Claude here in production.]"
+    macro_selected = [s for s in selected if s["label"] in MACRO_LABELS]
+    bitcoin_selected = [s for s in selected if s["label"] not in MACRO_LABELS]
+
+    macro_paragraphs = [
+        human.get(s["key"], "Key macro read for today.") + "  [Live macro paragraph written by Claude in production.]"
+        for s in macro_selected
+    ] or ["The macro backdrop sets today's stage. [Live macro paragraph written by Claude in production.]"]
+
+    bitcoin_paragraphs = [
+        human.get(s["key"], "Key read for today.") + "  [Live Bitcoin paragraph written by Claude in production.]"
+        for s in bitcoin_selected
+    ] or ["Bitcoin's on-chain picture follows from the macro above. [Live Bitcoin paragraph written by Claude in production.]"]
+
     return {
-        "headline": (f"Bitcoin at ${price:,.0f}. The cycle score reads {comp}, {regime}."
-                     if price else f"The cycle score reads {comp}, {regime}."),
+        "headline": "The Setup Nobody's Watching Yet",
         "tldr": (f"The monitor sits at {comp} out of 100, {regime.lower()}. The signal is "
-                 f"{verdict.lower()}. Charts below carry the detail. "
+                 f"{verdict.lower()}. The macro and on-chain detail follow below. "
                  f"[Live TL;DR written by Claude in production.]"),
-        "chart_reads": reads,
-        "what_to_watch": ("The accumulation zone stays $49.5K to $55K. "
-                          "[Live 'what to watch' written by Claude in production.]"),
+        "macro_headline": "The Macro Backdrop",
+        "macro_paragraphs": macro_paragraphs,
+        "bitcoin_headline": "Bitcoin's Setup",
+        "bitcoin_paragraphs": bitcoin_paragraphs,
+        "watch_macro": "The next macro catalyst to watch. [Live 'what to watch' macro line written by Claude in production.]",
+        "watch_price": ("The accumulation zone stays $49.5K to $55K. "
+                        "[Live 'what to watch' price line written by Claude in production.]"),
         "takeaway": (f"The framework reads {verdict.lower()}. "
                      f"[Live takeaway written by Claude in production.]"),
         "_dry_run": True,

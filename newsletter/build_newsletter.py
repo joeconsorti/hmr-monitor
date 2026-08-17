@@ -44,7 +44,7 @@ def send_beehiiv(html, subject, as_draft):
         return None
     payload = {
         "title": subject,
-        "subtitle": "The Bitcoin Brief · The Hard Money Room",
+        "subtitle": "The Bitcoin Brief · From Joe Consorti",
         "body_content": html,
         "status": "draft" if as_draft else "confirmed",
         "email_settings": {"email_subject_line": subject},
@@ -76,7 +76,7 @@ def main():
     data = collect_data.collect()
 
     print("2/6 selecting charts...")
-    selected = selector.select_charts(data, is_weekend=weekend)
+    selected = selector.select_charts(data, n_weekday=4, n_weekend=3, is_weekend=weekend)
     big_news, reasons = selector.detect_big_news(data)
     print(f"     charts: {[s['label'] for s in selected]}")
     if big_news:
@@ -98,7 +98,7 @@ def main():
     # dry-run inlines images (self-contained preview); production uses hosted URLs
     html = assemble_html.assemble(prose, charts, data, inline_base64=dry)
     preview_path = os.path.join(OUTDIR, "preview.html")
-    with open(preview_path, "w") as f:
+    with open(preview_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"     preview: {preview_path}")
 

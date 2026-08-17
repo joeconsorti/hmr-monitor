@@ -115,6 +115,11 @@ def score_supply_in_profit(d):
     return s
 
 
+# Charts that carry the macro/cross-asset story (as opposed to Bitcoin on-chain
+# data). THE MACRO section of the newsletter draws its inline charts from this
+# set; everything else illustrates THE PAYOFF (Bitcoin) section.
+MACRO_LABELS = {"gold", "btc_gold", "yields", "move", "semis"}
+
 # label -> (scoring function, chart-builder key used by render_charts.py)
 RULES = {
     "price_vs_levels": (score_price_vs_levels, "price_vs_levels"),
@@ -133,9 +138,12 @@ RULES = {
 }
 
 
-def select_charts(data, n_weekday=4, n_weekend=2, is_weekend=False):
+def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False):
     """Return the top charts for the day as a ranked list of
-    {key, label, score}. price_vs_levels always leads."""
+    {key, label, score}. price_vs_levels always leads. At least one macro
+    chart (see MACRO_LABELS) is always included -- the newsletter is
+    structured macro-first, so an all-Bitcoin lineup breaks THE MACRO
+    section."""
     n = n_weekend if is_weekend else n_weekday
     scored = []
     for label, (fn, chart_key) in RULES.items():
@@ -145,7 +153,17 @@ def select_charts(data, n_weekday=4, n_weekend=2, is_weekend=False):
             s = 0
         scored.append({"label": label, "key": chart_key, "score": round(s, 1)})
     scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:n]
+    top = scored[:n]
+
+    if not any(c["label"] in MACRO_LABELS for c in top):
+        macro_candidates = [c for c in scored if c["label"] in MACRO_LABELS]
+        non_essential = [c for c in top if c["label"] != "price_vs_levels"]
+        if macro_candidates and non_essential:
+            weakest = min(non_essential, key=lambda c: c["score"])
+            top[top.index(weakest)] = macro_candidates[0]
+            top.sort(key=lambda x: x["score"], reverse=True)
+
+    return top
 
 
 def detect_big_news(data):
