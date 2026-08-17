@@ -9,6 +9,7 @@ The voice lives entirely in voice_prompt.md — edit that one file to change how
 every future issue reads. This module only assembles the request.
 """
 import os
+import re
 import json
 import urllib.request
 
@@ -124,10 +125,37 @@ def write(data, selected, dry_run=False):
             f"bitcoin_paragraphs with at least {max(len(bitcoin_labels), 1)} paragraphs.")
     try:
         raw = _call_claude(api_key, system, user).strip()
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        _validate(parsed)
+        return parsed
     except Exception as e:
         print(f"  ! Claude API failed ({e}); using template fallback")
         return _template_fallback(data, selected, facts)
+
+
+# Matches a bare schema/field-name-style token (snake_case, no spaces or
+# punctuation) -- catches cases like the model echoing "paragraphs_placeholder"
+# instead of writing prose for a field.
+_SCHEMA_ARTIFACT = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _looks_like_prose(text, min_len=15):
+    text = (text or "").strip()
+    return len(text) >= min_len and not _SCHEMA_ARTIFACT.match(text)
+
+
+def _validate(parsed):
+    for key in ("headline", "tldr", "macro_headline", "bitcoin_headline",
+                "watch_macro", "watch_price", "takeaway"):
+        if not _looks_like_prose(parsed.get(key)):
+            raise ValueError(f"{key} looks like a schema artifact, not prose: {parsed.get(key)!r}")
+    for key in ("macro_paragraphs", "bitcoin_paragraphs"):
+        paras = parsed.get(key) or []
+        if not paras:
+            raise ValueError(f"{key} is empty")
+        for p in paras:
+            if not _looks_like_prose(p):
+                raise ValueError(f"{key} contains a schema artifact, not prose: {p!r}")
 
 
 def _template_fallback(data, selected, facts):
