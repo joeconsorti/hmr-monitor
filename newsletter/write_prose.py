@@ -16,6 +16,7 @@ import urllib.request
 from chart_select import MACRO_LABELS
 
 MODEL = "claude-opus-5"            # best quality for daily prose; swap freely
+FALLBACK_MODEL = "claude-sonnet-5"  # retried once if Opus fails or returns bad output
 VOICE_FILE = os.path.join(os.path.dirname(__file__), "voice_prompt.md")
 
 # Structured outputs schema. The brief opens on THE MACRO (macro_headline +
@@ -78,11 +79,11 @@ def _facts_block(data, selected):
     return "\n".join([x for x in lines if x])
 
 
-def _call_claude(api_key, system, user):
+def _call_claude(api_key, system, user, model=MODEL):
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=json.dumps({
-            "model": MODEL, "max_tokens": 8192, "system": system,
+            "model": model, "max_tokens": 8192, "system": system,
             "thinking": {"type": "disabled"},
             "output_config": {"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
             "messages": [{"role": "user", "content": user}],
@@ -123,14 +124,17 @@ def write(data, selected, dry_run=False):
             f"Write macro_paragraphs with at least {max(len(macro_labels), 2)} paragraphs "
             f"(even with no macro chart selected, still open on the macro backdrop) and "
             f"bitcoin_paragraphs with at least {max(len(bitcoin_labels), 1)} paragraphs.")
-    try:
-        raw = _call_claude(api_key, system, user).strip()
-        parsed = json.loads(raw)
-        _validate(parsed)
-        return parsed
-    except Exception as e:
-        print(f"  ! Claude API failed ({e}); using template fallback")
-        return _template_fallback(data, selected, facts)
+    for model in (MODEL, FALLBACK_MODEL):
+        try:
+            raw = _call_claude(api_key, system, user, model=model).strip()
+            parsed = json.loads(raw)
+            _validate(parsed)
+            return parsed
+        except Exception as e:
+            print(f"  ! {model} failed ({e})")
+
+    print("  ! both models failed; using template fallback")
+    return _template_fallback(data, selected, facts)
 
 
 # Matches a bare schema/field-name-style token (snake_case, no spaces or
