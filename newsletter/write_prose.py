@@ -14,7 +14,7 @@ import urllib.request
 
 from chart_select import MACRO_LABELS
 
-MODEL = "claude-sonnet-5"          # fast + cheap for daily prose; swap freely
+MODEL = "claude-opus-5"            # best quality for daily prose; swap freely
 VOICE_FILE = os.path.join(os.path.dirname(__file__), "voice_prompt.md")
 
 # Structured outputs schema. The brief opens on THE MACRO (macro_headline +
