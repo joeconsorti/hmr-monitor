@@ -81,7 +81,7 @@ def _call_claude(api_key, system, user):
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=json.dumps({
-            "model": MODEL, "max_tokens": 4096, "system": system,
+            "model": MODEL, "max_tokens": 8192, "system": system,
             "thinking": {"type": "disabled"},
             "output_config": {"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
             "messages": [{"role": "user", "content": user}],
@@ -89,8 +89,10 @@ def _call_claude(api_key, system, user):
         headers={"content-type": "application/json", "x-api-key": api_key,
                  "anthropic-version": "2023-06-01"},
     )
-    with urllib.request.urlopen(req, timeout=90) as r:
+    with urllib.request.urlopen(req, timeout=150) as r:
         body = json.loads(r.read())
+    if body.get("stop_reason") == "max_tokens":
+        raise RuntimeError("response truncated at max_tokens")
     return "".join(b.get("text", "") for b in body.get("content", []) if b.get("type") == "text")
 
 
