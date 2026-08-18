@@ -126,14 +126,9 @@ def assemble(prose, charts, data, inline_base64=True):
 
   <div style="background:linear-gradient(135deg,#1a0f06,#0d1117);border:1px solid {ORANGE};border-radius:12px;padding:26px 24px;margin:32px 0 20px;text-align:center;">
     <div style="color:{ORANGE};font-size:12px;letter-spacing:1px;font-weight:800;margin-bottom:10px;">JOIN THE HARD MONEY ROOM</div>
-    <p style="margin:0 0 8px;font-size:19px;color:#fff;font-weight:700;line-height:1.35;">You just read the summary. The room is where I show my work.</p>
-    <p style="margin:0 0 18px;font-size:14.5px;color:#c9d1d9;line-height:1.6;">Every chart in this brief, live and updated daily. Weekly live calls where I walk through the whole macro and Bitcoin picture in real time and answer your questions directly. Daily chart drops, the full cycle dashboard, and the exact levels I'm watching. This newsletter is the appetizer. The Hard Money Room is the table.</p>
+    <p style="margin:0 0 8px;font-size:19px;color:#fff;font-weight:700;line-height:1.35;">Get the live Bitcoin Cycle Monitor, plus every chart in this brief and more.</p>
+    <p style="margin:0 0 18px;font-size:14.5px;color:#c9d1d9;line-height:1.6;">The full cycle dashboard updated in real time, weekly live calls, and daily chart drops. Everything I'm watching, live, that I can't fit in a morning email.</p>
     <a href="https://www.skool.com/the-hard-money-room" style="display:inline-block;background:{ORANGE};color:#150a02;text-decoration:none;font-weight:800;padding:14px 34px;border-radius:8px;font-size:15px;">Join the Hard Money Room →</a>
-    <div style="color:#7d8896;font-size:12px;margin-top:14px;">Come see everything I can't fit in a morning email.</div>
-  </div>
-
-  <div style="text-align:center;margin:22px 0;">
-    <a href="https://monitor.joeconsorti.com" style="color:#9aa4b0;text-decoration:none;font-size:13px;border:1px solid #1c2530;border-radius:8px;padding:9px 20px;display:inline-block;">Or open the free live Cycle Monitor →</a>
   </div>
 
   <div style="border-top:1px solid #1c2530;margin-top:26px;padding-top:16px;color:#5a636e;font-size:11px;line-height:1.6;">
