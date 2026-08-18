@@ -236,6 +236,52 @@ def build_supply_in_profit(data, outdir):
                        60.0, 1500, outdir, "supply_in_profit.png", fill_below=True)
 
 
+def build_hash_ribbons(data, outdir):
+    """Hash ribbons: 30D vs 60D hashrate moving averages. Fast below slow
+    marks miner capitulation. Every historical instance (not just the latest)
+    gets shaded and annotated so the reader sees the recurring pattern."""
+    D = _dates(1500)
+    fast = _brk("hash_rate_sma_1m", 1500)
+    slow = _brk("hash_rate_sma_2m", 1500)
+    if not fast or not slow or not D:
+        raise RuntimeError("hash rate ribbon series unavailable")
+    n = min(len(D), len(fast), len(slow))
+    scale = 1e18   # H/s -> EH/s
+    dates = D[-n:]
+    f = [x / scale if isinstance(x, (int, float)) else None for x in fast[-n:]]
+    s = [x / scale if isinstance(x, (int, float)) else None for x in slow[-n:]]
+
+    runs, in_run, start = [], False, None
+    for i in range(n):
+        below = f[i] is not None and s[i] is not None and f[i] < s[i]
+        if below and not in_run:
+            in_run, start = True, i
+        elif not below and in_run:
+            in_run = False
+            runs.append((start, i - 1))
+    if in_run:
+        runs.append((start, n - 1))
+    runs = [r for r in runs if r[1] - r[0] >= 2]   # drop single-day noise
+
+    fig, ax = plt.subplots(figsize=(11, 5.2))
+    ax.plot(dates, f, color=ORANGE, lw=1.6, label="30D Hashrate MA (fast)")
+    ax.plot(dates, s, color="#5aa9e6", lw=1.6, label="60D Hashrate MA (slow)")
+    ax.margins(y=0.12)   # headroom so capitulation labels near the data max don't clip
+    ylim_top = ax.get_ylim()[1]
+    for a, b in runs:
+        ax.axvspan(dates[a], dates[b], color=TEAL, alpha=.18)
+        window = [v for v in f[a:b + 1] + s[a:b + 1] if v is not None]
+        if window:
+            label_y = min(max(window) * 1.02, ylim_top * 0.99)
+            ax.annotate("Capitulation", xy=(dates[(a + b) // 2], label_y),
+                        color=TEAL, fontsize=8.5, ha="center")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
+    ax.set_title("Hash Ribbons (miner capitulation: fast MA below slow MA)",
+                 color=TXT, fontsize=13, loc="left", pad=12)
+    ax.legend(loc="upper left", fontsize=9, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
+    _style(ax); return _save(fig, outdir, "hash_ribbons.png")
+
+
 BUILDERS = {
     "price_vs_levels": build_price_vs_levels,
     "sth_mvrv": build_sth_mvrv,
@@ -250,6 +296,7 @@ BUILDERS = {
     "fear_greed": build_fear_greed,
     "sth_share": build_sth_share,
     "supply_in_profit": build_supply_in_profit,
+    "hash_ribbons": build_hash_ribbons,
 }
 
 

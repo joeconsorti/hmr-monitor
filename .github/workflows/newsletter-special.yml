@@ -1,0 +1,57 @@
+name: The Bitcoin Brief (special issue)
+
+# Manual-only. Runs a one-off, hand-curated issue (send_special_issue.py)
+# instead of the daily auto-selected story. Separate from newsletter.yml so
+# special issues never affect the scheduled daily run.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r newsletter/requirements.txt
+
+      - name: Build and send the special issue
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
+          BEEHIIV_PUB_ID: ${{ secrets.BEEHIIV_PUB_ID }}
+          MONITOR_REPO_DIR: ${{ github.workspace }}
+          PAGES_BASE_URL: https://monitor.joeconsorti.com
+          # SAFETY: keep this "1" so special issues land as a Beehiiv DRAFT
+          # instead of emailing the list.
+          DRAFT_ONLY: "1"
+        run: |
+          cd newsletter
+          python send_special_issue.py
+
+      - name: Commit the day's charts for Pages hosting
+        run: |
+          git config user.name  "hmr-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add newsletter/charts/ || true
+          if ! git diff --cached --quiet; then
+            git commit -m "newsletter: special-issue chart images $(date -u +%F)"
+            git push
+          else
+            echo "No new charts to commit."
+          fi
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: newsletter-special-preview
+          path: newsletter/out/special_preview.html
+          retention-days: 7

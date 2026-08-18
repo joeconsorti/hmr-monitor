@@ -82,6 +82,7 @@ def collect():
         "reserve_risk": "reserve_risk", "puell": "puell_multiple",
         "sopr": "sopr_24h", "sth_sopr": "sth_sopr_24h", "lth_sopr": "lth_sopr_24h",
         "rhodl": "rhodl_ratio", "hash_rate": "hash_rate",
+        "hash_ma_fast": "hash_rate_sma_1m", "hash_ma_slow": "hash_rate_sma_2m",
     }.items():
         onchain[label] = _brk_last(s)
 

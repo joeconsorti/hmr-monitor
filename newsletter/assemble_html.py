@@ -72,6 +72,17 @@ def assemble(prose, charts, data, inline_base64=True):
     price_line = f"BTC ${price:,.0f}" if price else "BTC n/a"
     fg_line = f"Fear &amp; Greed: {fg['value']} ({fg['label']})" if fg else ""
 
+    video_html = ""
+    if prose.get("video_cta"):
+        video_html = (
+            "<div style='background:#131a22;border:1px solid " + ORANGE + ";border-radius:10px;"
+            "padding:16px 18px;margin:24px 0;text-align:center;'>"
+            "<div style='color:" + ORANGE + ";font-size:11px;letter-spacing:1px;font-weight:700;"
+            "margin-bottom:8px;'>TONIGHT ON YOUTUBE</div>"
+            f"<p style='margin:0;font-size:15px;line-height:1.6;color:#e6edf3;'>{prose['video_cta']}</p>"
+            "</div>"
+        )
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#0d1117;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
@@ -123,6 +134,8 @@ def assemble(prose, charts, data, inline_base64=True):
     <div style="color:#7d8896;font-size:11px;letter-spacing:1px;margin-bottom:10px;">THE ONE TAKEAWAY</div>
     <p style="margin:0;font-size:18px;line-height:1.5;color:#fff;font-weight:600;">{prose.get('takeaway','')}</p>
   </div>
+
+  {video_html}
 
   <div style="background:linear-gradient(135deg,#1a0f06,#0d1117);border:1px solid {ORANGE};border-radius:12px;padding:26px 24px;margin:32px 0 20px;text-align:center;">
     <div style="color:{ORANGE};font-size:12px;letter-spacing:1px;font-weight:800;margin-bottom:10px;">JOIN THE HARD MONEY ROOM</div>

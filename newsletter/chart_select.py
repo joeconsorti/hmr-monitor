@@ -115,6 +115,18 @@ def score_supply_in_profit(d):
     return s
 
 
+def score_hash_ribbons(d):
+    oc = d.get("onchain", {})
+    fast, slow = oc.get("hash_ma_fast"), oc.get("hash_ma_slow")
+    if not fast or not slow:
+        return 0
+    gap = _abs((fast - slow) / slow * 100)
+    s = gap * 3
+    if fast < slow:      # active miner capitulation
+        s += 40
+    return s
+
+
 # Charts that carry the macro/cross-asset story (as opposed to Bitcoin on-chain
 # data). THE MACRO section of the newsletter draws its inline charts from this
 # set; everything else illustrates THE PAYOFF (Bitcoin) section.
@@ -129,6 +141,7 @@ RULES = {
     "mvrv":            (score_mvrv, "mvrv"),
     "sth_share":       (score_sth_share, "sth_share"),
     "supply_in_profit": (score_supply_in_profit, "supply_in_profit"),
+    "hash_ribbons":    (score_hash_ribbons, "hash_ribbons"),
     "fear_greed":      (score_fear_greed, "fear_greed"),
     "gold":            (score_gold, "gold"),
     "btc_gold":        (score_btc_gold, "btc_gold"),
