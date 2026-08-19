@@ -1,5 +1,22 @@
 [
-  {"date": "2026-08-16", "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.", "lead_label": "gold"},
-  {"date": "2026-08-17", "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.", "lead_label": "gold"},
-  {"date": "2026-08-18", "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.", "lead_label": "gold"}
+  {
+    "date": "2026-08-16",
+    "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.",
+    "lead_label": "gold"
+  },
+  {
+    "date": "2026-08-17",
+    "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.",
+    "lead_label": "gold"
+  },
+  {
+    "date": "2026-08-18",
+    "headline": "Gold Is Screaming. Bitcoin Hasn't Heard It Yet.",
+    "lead_label": "gold"
+  },
+  {
+    "date": "2026-08-19",
+    "headline": "Long-Term Holders Are Selling At A Loss. That Only Happens Near Bottoms.",
+    "lead_label": "lth_sopr"
+  }
 ]
