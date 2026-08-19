@@ -16,7 +16,13 @@
   },
   {
     "date": "2026-08-19",
-    "headline": "Recent Buyers Are Underwater. Old Hands Aren't Blinking.",
-    "lead_label": "lth_sopr"
+    "headline": "The Sellers Aren't There Anymore",
+    "lead_label": "special:price_vs_levels",
+    "chart_labels": [
+      "price_vs_levels",
+      "sth_share",
+      "supply_in_profit",
+      "mvrv"
+    ]
   }
 ]
