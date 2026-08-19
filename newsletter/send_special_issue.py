@@ -25,53 +25,54 @@ import recent_angles
 
 OUTDIR = os.path.join(os.path.dirname(__file__), "out")
 
-# This issue's angle: miners diversifying into AI compute is a bullish signal
-# for Bitcoin, and two big names have separately flagged that the cycle bottom
-# looks close. Charts are hand-picked to back that up rather than auto-scored.
+# This issue's angle: supply-side seller exhaustion -- the share of Bitcoin
+# held by recently-active/short-term sellers has fallen to (or near) the
+# lowest level in the available data. Charts are hand-picked to prove that
+# claim with real on-chain data rather than auto-scored.
 SELECTED = [
-    {"key": "hash_ribbons", "label": "hash_ribbons"},
     {"key": "price_vs_levels", "label": "price_vs_levels"},
-    {"key": "puell", "label": "puell"},
+    {"key": "sth_share", "label": "sth_share"},
+    {"key": "supply_in_profit", "label": "supply_in_profit"},
     {"key": "mvrv", "label": "mvrv"},
 ]
 
 SPECIAL_SCHEMA = dict(write_prose.RESPONSE_SCHEMA)
 SPECIAL_SCHEMA["properties"] = dict(write_prose.RESPONSE_SCHEMA["properties"])
 SPECIAL_SCHEMA["properties"]["video_cta"] = {"type": "string"}
-SPECIAL_SCHEMA["required"] = write_prose.RESPONSE_SCHEMA["required"] + ["video_cta"]
+# video_cta stays optional -- this issue has no video tie-in, unlike the
+# miners/AI issue this script was originally written for.
 
 SPECIAL_ANGLE = """
 Today's issue has a specific angle, different from a normal auto-generated day.
 Do not write the usual data-of-the-day story. Instead build the whole issue
 around this narrative:
 
-1. Bitcoin miners are increasingly pivoting excess capacity into AI/HPC
-   compute hosting. Frame this as bullish for Bitcoin: it diversifies miner
-   revenue away from pure block-subsidy dependence, reduces the forced,
-   panic-driven coin selling that miners have historically done to cover
-   costs during stress, and signals miners have enough confidence in
-   Bitcoin's long game to invest in infrastructure rather than exit.
-2. BlackRock has publicly said it sees the Bitcoin cycle bottom as close.
-3. VanEck has publicly said a number of Bitcoin bottom indicators are
-   already firing.
-4. Use the hash ribbons chart (fast 30D hashrate MA vs slow 60D MA) as the
-   on-chain confirmation: it's annotated with every prior instance of minor
-   miner capitulation (fast dipping below slow), not just the latest one, so
-   ground the read in that historical pattern, not just today's snapshot.
-   Tie the miner-AI-pivot point directly to what the ribbons show.
-5. Use Puell Multiple (miner revenue stress vs history) and MVRV (price vs
-   network cost basis) as the supporting on-chain reads. State plainly, using
-   the real numbers given below, whether they're actually in bottom-signal
-   territory right now or not yet there. VanEck's "indicators are firing"
-   claim only lands if it's checked against real data, not just repeated.
-6. Structure: THE MACRO section carries the institutional angle (miners
-   pivoting to AI, BlackRock, VanEck) as the macro-scale story: big money and
-   infrastructure builders positioning early. THE PAYOFF section carries the
-   on-chain confirmation (hash ribbons, Puell, MVRV) as Bitcoin's own data
-   either backing that up or showing where it's not fully there yet.
-7. Close with a video_cta field: one or two sentences telling the reader to
-   turn on notifications for tonight's YouTube video, which goes deeper on
-   all of this. Make it feel like a natural next step, not a bolted-on ask.
+1. Supply-side seller exhaustion. STH Realized-Cap Share -- the share of
+   Bitcoin's realized value held by recently-active, short-term-holder coins
+   -- measures how much sellable supply is still in active hands. The data
+   below tells you the exact current reading AND the real historical floor
+   over the available lookback window, plus whether today IS or IS NOT that
+   record low. Use those exact numbers. If today genuinely is the record low
+   for that window, say plainly that sellers have not been this exhausted in
+   that entire stretch of history -- that is a strong, real claim, no need to
+   inflate it further. If today is NOT the record low, do not claim it is;
+   describe it honestly as a multi-year low instead. Precision beats punch.
+2. Corroborate with Supply in Profit: a falling share of coins able to sell
+   at a profit reinforces the same seller-exhaustion read from a different
+   angle. State the real number given below.
+3. Cross-check against MVRV (price vs. network cost basis) as the standard
+   valuation read, stated honestly against its real reading -- don't force
+   it to agree if the number doesn't support the same conclusion.
+4. Structure: THE MACRO section opens on the felt tension -- most people
+   assume a market this beaten-down still has plenty of sellers left in it,
+   and that assumption is what today's data actually contradicts -- then
+   pivots into the supply mechanics as the setup. There is no dedicated
+   macro chart selected today; that's fine, still write real macro_paragraphs
+   per the usual structure, just without an inline chart image in that
+   section. THE PAYOFF section carries the on-chain proof: STH Realized-Cap
+   Share as the headline data point, then Supply in Profit and MVRV as
+   corroboration, one paragraph each.
+5. No video CTA today. Leave video_cta out entirely.
 """
 
 
@@ -144,7 +145,7 @@ def write_special_prose(data, dry_run=False):
             raw = _call_claude_special(api_key, system, user, model=model).strip()
             parsed = json.loads(raw)
             write_prose._validate(parsed)
-            if not write_prose._looks_like_prose(parsed.get("video_cta")):
+            if parsed.get("video_cta") and not write_prose._looks_like_prose(parsed.get("video_cta")):
                 raise ValueError(f"video_cta looks like a schema artifact: {parsed.get('video_cta')!r}")
             return parsed
         except Exception as e:
@@ -176,9 +177,7 @@ def _call_claude_special(api_key, system, user, model):
 
 def _template_fallback(data, facts):
     base = write_prose._template_fallback(data, SELECTED, facts)
-    base["headline"] = "The Miners Are Telling You Something"
-    base["video_cta"] = ("[Live video CTA written by Claude in production.] "
-                         "Turn on notifications, tonight's YouTube video goes deeper on this.")
+    base["headline"] = "Sellers Have Nothing Left To Sell"
     return base
 
 

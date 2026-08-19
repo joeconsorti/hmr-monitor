@@ -94,9 +94,12 @@ def collect():
         ser = _brk_series(s, 60)
         deltas[label] = {"d1": _pct_change(ser, 1), "d7": _pct_change(ser, 7),
                          "d30": _pct_change(ser, 30)}
-    # derived cohort + profitability reads for the newsletter
-    sth_rc = _brk_series("sth_realized_cap", 60)
-    tot_rc = _brk_series("realized_cap", 60)
+    # derived cohort + profitability reads for the newsletter. 1500-day window
+    # (matches the "long lookback" convention already used elsewhere, e.g.
+    # render_charts.py's puell/mvrv/hash-ribbons charts) so "lowest ever"
+    # style claims can be checked against real history instead of asserted.
+    sth_rc = _brk_series("sth_realized_cap", 1500)
+    tot_rc = _brk_series("realized_cap", 1500)
     if sth_rc and tot_rc:
         n = min(len(sth_rc), len(tot_rc))
         share = [(a / b * 100) for a, b in zip(sth_rc[-n:], tot_rc[-n:])
@@ -104,12 +107,19 @@ def collect():
         if share:
             onchain["sth_realized_share"] = round(share[-1], 1)
             deltas["sth_realized_share"] = {"d30": round(share[-1] - share[-30], 2) if len(share) > 30 else None}
-    sip = _brk_series("supply_in_profit_share", 60)
+            hist_min = min(share)
+            onchain["sth_realized_share_hist_min"] = round(hist_min, 1)
+            onchain["sth_realized_share_hist_days"] = len(share)
+            onchain["sth_realized_share_is_hist_low"] = share[-1] <= hist_min + 1e-9
+    sip = _brk_series("supply_in_profit_share", 1500)
     if sip:
         clean = [x for x in sip if isinstance(x, (int, float))]
         if clean:
             onchain["supply_in_profit"] = round(clean[-1], 1)
             deltas["supply_in_profit"] = {"d30": round(clean[-1] - clean[-30], 2) if len(clean) > 30 else None}
+            hist_min_sip = min(clean)
+            onchain["supply_in_profit_hist_min"] = round(hist_min_sip, 1)
+            onchain["supply_in_profit_hist_days"] = len(clean)
     data["onchain"] = onchain
     data["deltas"] = deltas
 

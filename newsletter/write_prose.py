@@ -52,6 +52,35 @@ def _load_voice():
         return "Write in a terse, direct Bitcoin-macro voice. No em-dashes."
 
 
+def _sth_share_fact(oc):
+    """STH Realized-Cap Share: the share of network value held in recently-
+    active/short-term-holder coins -- i.e. how much sellable supply is still
+    in active hands. Low = seller exhaustion. Includes the real historical
+    floor and window size so the model can't overclaim "lowest ever" beyond
+    what the data actually shows."""
+    v = oc.get("sth_realized_share")
+    if v is None:
+        return ""
+    hist_min = oc.get("sth_realized_share_hist_min")
+    days = oc.get("sth_realized_share_hist_days")
+    years = round(days / 365, 1) if days else None
+    if oc.get("sth_realized_share_is_hist_low"):
+        return (f"STH Realized-Cap Share (active/recent-seller supply -- 'seller exhaustion'): "
+                f"{v}%, the LOWEST reading in the last {days} days (~{years} years) of available "
+                f"history. Sellers have not been this exhausted in that entire window.")
+    return (f"STH Realized-Cap Share (active/recent-seller supply -- 'seller exhaustion'): {v}% "
+            f"(the floor over the last {days} days / ~{years} years was {hist_min}%, so today is "
+            f"NOT a record low -- do not claim it is, describe it as near multi-year lows instead)")
+
+
+def _sip_fact(oc):
+    v = oc.get("supply_in_profit")
+    if v is None:
+        return ""
+    hist_min = oc.get("supply_in_profit_hist_min")
+    return f"Supply in Profit: {v}%" + (f" (floor over available history: {hist_min}%)" if hist_min is not None else "")
+
+
 def _facts_block(data, selected):
     """Compact, model-friendly digest of the day's numbers."""
     oc = data.get("onchain", {})
@@ -68,6 +97,7 @@ def _facts_block(data, selected):
         f"STH MVRV: {oc.get('sth_mvrv')}", f"LTH SOPR: {oc.get('lth_sopr')}",
         f"Puell: {oc.get('puell')}", f"MVRV: {oc.get('mvrv')}", f"NUPL: {oc.get('nupl')}",
         f"Fear & Greed: {fg.get('value')} ({fg.get('label')}), yesterday {fg.get('yesterday')}",
+        _sth_share_fact(oc), _sip_fact(oc),
     ]
     for k, lbl in [("gold", "Gold"), ("sp500", "S&P 500"), ("nasdaq", "Nasdaq"),
                    ("move", "MOVE index"), ("brent", "Brent"), ("copper", "Copper"),
