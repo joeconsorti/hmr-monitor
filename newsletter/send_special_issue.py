@@ -21,6 +21,7 @@ import publish_charts
 import write_prose
 import assemble_html
 import build_newsletter
+import recent_angles
 
 OUTDIR = os.path.join(os.path.dirname(__file__), "out")
 
@@ -93,6 +94,9 @@ def main():
     print("5/6 writing prose...")
     prose = write_special_prose(data, dry_run=dry)
 
+    if not dry and prose.get("headline"):
+        recent_angles.record(prose["headline"], "special:" + SELECTED[0]["label"])
+
     print("6/6 assembling HTML...")
     html = assemble_html.assemble(prose, charts, data, inline_base64=dry)
     preview_path = os.path.join(OUTDIR, "special_preview.html")
@@ -126,7 +130,8 @@ def write_special_prose(data, dry_run=False):
     macro_labels = [s["label"] for s in SELECTED if s["label"] in write_prose.MACRO_LABELS]
     bitcoin_labels = [s["label"] for s in SELECTED if s["label"] not in write_prose.MACRO_LABELS]
 
-    system = voice + "\n\n" + SPECIAL_ANGLE
+    recent = recent_angles.load_recent()
+    system = voice + "\n\n" + SPECIAL_ANGLE + write_prose._recent_angles_block(recent)
     user = (f"Today's data:\n{facts}\n\n"
             f"Macro charts selected today: {macro_labels or 'none'}\n"
             f"Bitcoin/on-chain charts selected today: {bitcoin_labels}\n\n"

@@ -151,12 +151,38 @@ RULES = {
 }
 
 
-def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False):
+def _apply_rotation(scored, recent_leads):
+    """Nudge down charts that led recently so a persistent-but-not-dominant
+    mover (e.g. gold on a long rally) doesn't monopolize the lead angle every
+    day. This only reorders near-ties -- a genuinely dominant, one-off story
+    (a big single-day move) will still outscore the penalty and lead again.
+    recent_leads is oldest-first; the most recent day gets the biggest hit.
+    price_vs_levels is exempt: it always anchors the chart lineup, it isn't
+    itself "the angle" the headline leads on."""
+    if not recent_leads:
+        return
+    penalties = [0.25, 0.15, 0.08]   # led yesterday, 2 days ago, 3 days ago
+    recency_by_label = {}
+    for i, label in enumerate(reversed(recent_leads)):
+        if i >= len(penalties):
+            break
+        recency_by_label.setdefault(label, i)
+    for c in scored:
+        if c["label"] == "price_vs_levels":
+            continue
+        i = recency_by_label.get(c["label"])
+        if i is not None:
+            c["score"] = round(c["score"] * (1 - penalties[i]), 1)
+
+
+def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False, recent_leads=None):
     """Return the top charts for the day as a ranked list of
     {key, label, score}. price_vs_levels always leads. At least one macro
     chart (see MACRO_LABELS) is always included -- the newsletter is
     structured macro-first, so an all-Bitcoin lineup breaks THE MACRO
-    section."""
+    section. recent_leads (optional): oldest-first list of recent days' lead
+    chart labels, used to lightly rotate away from repeating the same lead
+    angle -- see _apply_rotation."""
     n = n_weekend if is_weekend else n_weekday
     scored = []
     for label, (fn, chart_key) in RULES.items():
@@ -165,6 +191,7 @@ def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False):
         except Exception:
             s = 0
         scored.append({"label": label, "key": chart_key, "score": round(s, 1)})
+    _apply_rotation(scored, recent_leads)
     scored.sort(key=lambda x: x["score"], reverse=True)
     top = scored[:n]
 

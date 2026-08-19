@@ -26,6 +26,7 @@ import render_charts
 import publish_charts
 import write_prose
 import assemble_html
+import recent_angles
 
 OUTDIR = os.path.join(os.path.dirname(__file__), "out")
 
@@ -76,9 +77,14 @@ def main():
     data = collect_data.collect()
 
     print("2/6 selecting charts...")
-    selected = selector.select_charts(data, n_weekday=4, n_weekend=3, is_weekend=weekend)
+    recent = recent_angles.load_recent()
+    recent_leads = [e["lead_label"] for e in recent if e.get("lead_label")]
+    selected = selector.select_charts(data, n_weekday=4, n_weekend=3, is_weekend=weekend,
+                                       recent_leads=recent_leads)
     big_news, reasons = selector.detect_big_news(data)
     print(f"     charts: {[s['label'] for s in selected]}")
+    if recent_leads:
+        print(f"     recent lead angles (rotation input): {recent_leads}")
     if big_news:
         print(f"     BIG NEWS: {reasons} -> will land as DRAFT")
 
@@ -92,7 +98,16 @@ def main():
     charts = publish_charts.publish(charts, dry_run=dry)
 
     print("5/6 writing prose...")
-    prose = write_prose.write(data, selected, dry_run=dry)
+    prose = write_prose.write(data, selected, dry_run=dry, recent_angles=recent)
+
+    lead_label = next((c["label"] for c in selected if c["label"] != "price_vs_levels"),
+                       selected[0]["label"] if selected else "price_vs_levels")
+    if not dry and prose.get("headline"):
+        # Record for tomorrow's rotation/anti-repeat check. Skipped in dry-run
+        # since the fallback headline is templated placeholder text, not a
+        # real angle worth remembering.
+        recent_angles.record(prose["headline"], lead_label)
+        print(f"     recorded today's angle: \"{prose['headline']}\" (lead: {lead_label})")
 
     print("6/6 assembling HTML...")
     # dry-run inlines images (self-contained preview); production uses hosted URLs

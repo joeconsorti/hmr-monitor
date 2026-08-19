@@ -98,9 +98,33 @@ def _call_claude(api_key, system, user, model=MODEL):
     return "".join(b.get("text", "") for b in body.get("content", []) if b.get("type") == "text")
 
 
-def write(data, selected, dry_run=False):
+def _recent_angles_block(recent_angles):
+    """Render the last several days' headlines/lead topics as a system-prompt
+    block instructing the model to avoid repeating them. Returns "" if there's
+    no history yet."""
+    if not recent_angles:
+        return ""
+    lines = [f"- {e.get('date','?')}: \"{e.get('headline','')}\" (lead topic: {e.get('lead_label','?')})"
+             for e in recent_angles if e.get("headline")]
+    if not lines:
+        return ""
+    return (
+        "\n\nRECENT ISSUES (most recent last) -- do not repeat these:\n" + "\n".join(lines) +
+        "\n\nToday's headline MUST take a distinctly different angle and distinctly different "
+        "wording from every headline above -- not a rephrase, not the same lead topic with new "
+        "numbers. If the same lead topic (e.g. gold, or the same on-chain metric) genuinely still "
+        "dominates today's data, you may still cover it inside the brief, but do NOT make it "
+        "today's headline/hook again -- lead on a different angle from today's data instead "
+        "(the macro/Fed picture, on-chain cohorts, miners, cycle timing, cross-asset moves, "
+        "whatever is actually most notable today besides the recently-used angle)."
+    )
+
+
+def write(data, selected, dry_run=False, recent_angles=None):
     """Return a dict of newsletter sections. Live via Claude API, or a clear
-    templated draft in dry-run / no-key mode."""
+    templated draft in dry-run / no-key mode. recent_angles (optional): the
+    last several days' {date, headline, lead_label} entries from
+    recent_angles.py, used to steer away from repeating the same angle."""
     voice = _load_voice()
     facts = _facts_block(data, selected)
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -115,7 +139,7 @@ def write(data, selected, dry_run=False):
               "a tldr, THE MACRO section (macro_headline + macro_paragraphs), THE PAYOFF section "
               "(bitcoin_headline + bitcoin_paragraphs) that resolves the macro story into Bitcoin "
               "as its causal payoff, what to watch (a macro catalyst, then a price level), and a "
-              "takeaway.")
+              "takeaway." + _recent_angles_block(recent_angles))
     user = (f"Today's data:\n{facts}\n\n"
             f"Macro charts selected today (each gets its own paragraph in THE MACRO section): "
             f"{macro_labels or 'none'}\n"
