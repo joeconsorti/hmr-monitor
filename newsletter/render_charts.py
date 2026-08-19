@@ -5,6 +5,7 @@ Each builder returns a saved file path. Add a new builder + a RULES entry in
 select.py to introduce a new chart type.
 """
 import os
+import hashlib
 from datetime import datetime
 import requests
 import matplotlib
@@ -72,7 +73,25 @@ def _align(vals, D):
 def _save(fig, outdir, name):
     path = os.path.join(outdir, name)
     fig.tight_layout(); fig.savefig(path, dpi=130, bbox_inches="tight"); plt.close(fig)
-    return path
+    return _versioned(path)
+
+
+def _versioned(path):
+    """Rename to a content-hashed filename (name.<hash>.png). Plain, repeated
+    filenames like "gold.png" meant a same-day re-run -- a manual retry, or a
+    second pipeline like send_special_issue.py sharing the same date folder
+    -- would silently overwrite the exact file an already-generated/already-
+    sent issue was pointing at, so a reader could see chart pixels from a
+    different run than the one whose numbers are in the prose. Hashing the
+    content into the filename gives every run's image its own permanent URL:
+    nothing ever overwrites, and a CDN/browser cache can never go stale since
+    new content always means a new URL."""
+    with open(path, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()[:10]
+    root, ext = os.path.splitext(path)
+    versioned = f"{root}.{digest}{ext}"
+    os.replace(path, versioned)
+    return versioned
 
 
 # ---- individual chart builders -----------------------------------------
