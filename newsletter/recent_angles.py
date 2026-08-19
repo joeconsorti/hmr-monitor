@@ -23,10 +23,12 @@ def load_recent(n=KEEP):
     return entries[-n:]
 
 
-def record(headline, lead_label, date=None):
-    """Append today's headline/lead topic, replacing any existing entry for
-    the same date (so re-running the same day doesn't duplicate), and trim to
-    the last KEEP days."""
+def record(headline, lead_label, chart_labels=None, date=None):
+    """Append today's headline/lead topic/full chart lineup, replacing any
+    existing entry for the same date (so re-running the same day doesn't
+    duplicate), and trim to the last KEEP days. chart_labels is the day's
+    full list of selected chart labels, used by chart_select.py's
+    recent_sets hard-exclusion so the lineup can't repeat day to day."""
     date = date or datetime.date.today().isoformat()
     try:
         with open(PATH, "r", encoding="utf-8") as f:
@@ -34,7 +36,8 @@ def record(headline, lead_label, date=None):
     except Exception:
         entries = []
     entries = [e for e in entries if e.get("date") != date]
-    entries.append({"date": date, "headline": headline, "lead_label": lead_label})
+    entries.append({"date": date, "headline": headline, "lead_label": lead_label,
+                     "chart_labels": chart_labels or []})
     entries = entries[-KEEP:]
     with open(PATH, "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2)

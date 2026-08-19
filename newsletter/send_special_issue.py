@@ -95,7 +95,8 @@ def main():
     prose = write_special_prose(data, dry_run=dry)
 
     if not dry and prose.get("headline"):
-        recent_angles.record(prose["headline"], "special:" + SELECTED[0]["label"])
+        recent_angles.record(prose["headline"], "special:" + SELECTED[0]["label"],
+                             chart_labels=[s["label"] for s in SELECTED])
 
     print("6/6 assembling HTML...")
     html = assemble_html.assemble(prose, charts, data, inline_base64=dry)

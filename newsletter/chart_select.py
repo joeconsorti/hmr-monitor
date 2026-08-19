@@ -151,59 +151,130 @@ RULES = {
 }
 
 
-def _apply_rotation(scored, recent_leads):
-    """Nudge down charts that led recently so a persistent-but-not-dominant
-    mover (e.g. gold on a long rally) doesn't monopolize the lead angle every
-    day. This only reorders near-ties -- a genuinely dominant, one-off story
-    (a big single-day move) will still outscore the penalty and lead again.
-    recent_leads is oldest-first; the most recent day gets the biggest hit.
-    price_vs_levels is exempt: it always anchors the chart lineup, it isn't
-    itself "the angle" the headline leads on."""
-    if not recent_leads:
-        return
-    penalties = [0.25, 0.15, 0.08]   # led yesterday, 2 days ago, 3 days ago
-    recency_by_label = {}
-    for i, label in enumerate(reversed(recent_leads)):
-        if i >= len(penalties):
-            break
-        recency_by_label.setdefault(label, i)
-    for c in scored:
-        if c["label"] == "price_vs_levels":
-            continue
-        i = recency_by_label.get(c["label"])
-        if i is not None:
-            c["score"] = round(c["score"] * (1 - penalties[i]), 1)
+# Category buckets. Rotation guarantees the day's lineup spans different
+# categories instead of always drawing the same on-chain oscillators. Every
+# label in RULES must appear in exactly one bucket (except price_vs_levels,
+# which is the permanent anchor and lives outside the rotation).
+CATEGORIES = {
+    "macro":    ["gold", "yields", "move", "btc_gold", "semis"],
+    "cohort":   ["sth_mvrv", "lth_sopr", "sth_share", "supply_in_profit"],
+    "valuation":["mvrv", "fear_greed"],
+    "miner":    ["puell", "hash_ribbons"],
+}
+LABEL_CATEGORY = {lbl: cat for cat, lbls in CATEGORIES.items() for lbl in lbls}
 
 
-def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False, recent_leads=None):
-    """Return the top charts for the day as a ranked list of
-    {key, label, score}. price_vs_levels always leads. At least one macro
-    chart (see MACRO_LABELS) is always included -- the newsletter is
-    structured macro-first, so an all-Bitcoin lineup breaks THE MACRO
-    section. recent_leads (optional): oldest-first list of recent days' lead
-    chart labels, used to lightly rotate away from repeating the same lead
-    angle -- see _apply_rotation."""
+def _recent_used(recent_sets, lookback):
+    """Flatten the last `lookback` days of chart lineups into a set of labels
+    that should be avoided today. recent_sets is oldest-first; each entry is a
+    list of that day's chart labels."""
+    used = set()
+    if not recent_sets:
+        return used
+    for day in recent_sets[-lookback:]:
+        for label in day:
+            used.add(label)
+    return used
+
+
+def select_charts(data, n_weekday=4, n_weekend=3, is_weekend=False,
+                  recent_sets=None, recent_leads=None):
+    """Pick the day's charts with guaranteed variety.
+
+    price_vs_levels always anchors. The remaining slots are filled by rotating
+    across CATEGORIES (macro / cohort / valuation / miner) so no single category
+    dominates, and by HARD-EXCLUDING any chart used in the last 2 days so the
+    lineup can't repeat day to day. Within what's left, the score functions pick
+    the most newsworthy chart per category.
+
+    recent_sets: oldest-first list of prior days' full chart-label lineups.
+    recent_leads: kept for backward compatibility; if recent_sets is absent it's
+    treated as a 1-per-day history.
+    """
     n = n_weekend if is_weekend else n_weekday
-    scored = []
+
+    # normalize history: prefer full sets, fall back to leads-as-sets
+    if recent_sets is None and recent_leads:
+        recent_sets = [[l] for l in recent_leads]
+
+    # score everything once
+    scored = {}
     for label, (fn, chart_key) in RULES.items():
         try:
             s = fn(data)
         except Exception:
             s = 0
-        scored.append({"label": label, "key": chart_key, "score": round(s, 1)})
-    _apply_rotation(scored, recent_leads)
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    top = scored[:n]
+        scored[label] = {"label": label, "key": chart_key, "score": round(s, 1)}
 
-    if not any(c["label"] in MACRO_LABELS for c in top):
-        macro_candidates = [c for c in scored if c["label"] in MACRO_LABELS]
-        non_essential = [c for c in top if c["label"] != "price_vs_levels"]
-        if macro_candidates and non_essential:
-            weakest = min(non_essential, key=lambda c: c["score"])
-            top[top.index(weakest)] = macro_candidates[0]
-            top.sort(key=lambda x: x["score"], reverse=True)
+    # charts to avoid: used in the last 2 days (hard exclusion)
+    avoid = _recent_used(recent_sets, lookback=2)
+    avoid.discard("price_vs_levels")  # anchor is exempt
 
-    return top
+    # start with the permanent anchor
+    chosen = [scored["price_vs_levels"]]
+    chosen_labels = {"price_vs_levels"}
+    used_categories = set()
+
+    # rotate the category order daily so the same category doesn't always lead
+    # the non-anchor slots. Use day-of-year for a deterministic, even rotation.
+    import datetime
+    doy = datetime.date.today().timetuple().tm_yday
+    cat_order = ["macro", "cohort", "valuation", "miner"]
+    rot = doy % len(cat_order)
+    cat_order = cat_order[rot:] + cat_order[:rot]
+
+    def best_in(category, allow_avoided=False):
+        cands = [scored[l] for l in CATEGORIES[category]
+                 if l not in chosen_labels
+                 and (allow_avoided or l not in avoid)]
+        if not cands:
+            return None
+        return max(cands, key=lambda c: c["score"])
+
+    # PASS 1: one chart from each category in the rotated order, skipping
+    # anything used in the last 2 days. Guarantees macro + cohort variety.
+    for cat in cat_order:
+        if len(chosen) >= n:
+            break
+        pick = best_in(cat)
+        if pick:
+            chosen.append(pick); chosen_labels.add(pick["label"])
+            used_categories.add(cat)
+
+    # PASS 2: still short (small market / lots excluded)? Relax the 2-day
+    # exclusion but still prefer unused categories and highest score.
+    if len(chosen) < n:
+        for cat in cat_order:
+            if len(chosen) >= n:
+                break
+            pick = best_in(cat, allow_avoided=True)
+            if pick and pick["label"] not in chosen_labels:
+                chosen.append(pick); chosen_labels.add(pick["label"])
+
+    # PASS 3: absolute fallback -- fill from anything left by score.
+    if len(chosen) < n:
+        leftovers = sorted(
+            (c for l, c in scored.items() if l not in chosen_labels),
+            key=lambda c: c["score"], reverse=True)
+        for c in leftovers:
+            if len(chosen) >= n:
+                break
+            chosen.append(c); chosen_labels.add(c["label"])
+
+    # guarantee at least one macro chart (newsletter is macro-first)
+    if not any(c["label"] in MACRO_LABELS for c in chosen):
+        macro_pick = best_in("macro", allow_avoided=True)
+        if macro_pick:
+            non_anchor = [c for c in chosen if c["label"] != "price_vs_levels"]
+            if non_anchor:
+                weakest = min(non_anchor, key=lambda c: c["score"])
+                chosen[chosen.index(weakest)] = macro_pick
+
+    # final order: anchor first, then by score
+    anchor = [c for c in chosen if c["label"] == "price_vs_levels"]
+    rest = sorted((c for c in chosen if c["label"] != "price_vs_levels"),
+                  key=lambda c: c["score"], reverse=True)
+    return anchor + rest
 
 
 def detect_big_news(data):

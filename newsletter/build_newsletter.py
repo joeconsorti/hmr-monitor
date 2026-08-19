@@ -78,13 +78,13 @@ def main():
 
     print("2/6 selecting charts...")
     recent = recent_angles.load_recent()
-    recent_leads = [e["lead_label"] for e in recent if e.get("lead_label")]
+    recent_sets = [e.get("chart_labels", []) for e in recent]
     selected = selector.select_charts(data, n_weekday=4, n_weekend=3, is_weekend=weekend,
-                                       recent_leads=recent_leads)
+                                       recent_sets=recent_sets)
     big_news, reasons = selector.detect_big_news(data)
     print(f"     charts: {[s['label'] for s in selected]}")
-    if recent_leads:
-        print(f"     recent lead angles (rotation input): {recent_leads}")
+    if any(recent_sets):
+        print(f"     recent lineups (rotation input): {recent_sets}")
     if big_news:
         print(f"     BIG NEWS: {reasons} -> will land as DRAFT")
 
@@ -102,12 +102,14 @@ def main():
 
     lead_label = next((c["label"] for c in selected if c["label"] != "price_vs_levels"),
                        selected[0]["label"] if selected else "price_vs_levels")
+    chart_labels = [c["label"] for c in selected]
     if not dry and prose.get("headline"):
         # Record for tomorrow's rotation/anti-repeat check. Skipped in dry-run
         # since the fallback headline is templated placeholder text, not a
         # real angle worth remembering.
-        recent_angles.record(prose["headline"], lead_label)
-        print(f"     recorded today's angle: \"{prose['headline']}\" (lead: {lead_label})")
+        recent_angles.record(prose["headline"], lead_label, chart_labels=chart_labels)
+        print(f"     recorded today's angle: \"{prose['headline']}\" (lead: {lead_label}, "
+              f"charts: {chart_labels})")
 
     print("6/6 assembling HTML...")
     # dry-run inlines images (self-contained preview); production uses hosted URLs
