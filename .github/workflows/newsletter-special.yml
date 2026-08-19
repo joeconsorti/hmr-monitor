@@ -44,7 +44,17 @@ jobs:
           git add newsletter/charts/ newsletter/recent_angles.json || true
           if ! git diff --cached --quiet; then
             git commit -m "newsletter: special-issue chart images + angle history $(date -u +%F)"
-            git push
+            # Other jobs (the daily monitor-data cron, the daily newsletter
+            # workflow) push to main independently, so a plain push can lose
+            # a race. Retry with a rebase onto whatever landed in between --
+            # this commit only touches newsletter/charts/ and
+            # recent_angles.json, so it always applies cleanly.
+            for i in 1 2 3 4 5; do
+              git push && break
+              echo "push rejected (attempt $i) -- fetching + rebasing and retrying"
+              git fetch origin
+              git rebase origin/main
+            done
           else
             echo "No new charts to commit."
           fi
