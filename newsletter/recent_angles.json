@@ -24,5 +24,16 @@
       "supply_in_profit",
       "mvrv"
     ]
+  },
+  {
+    "date": "2026-08-20",
+    "headline": "Bond Market Volatility Just Went Quiet, And Nobody Noticed",
+    "lead_label": "lth_sopr",
+    "chart_labels": [
+      "price_vs_levels",
+      "lth_sopr",
+      "gold",
+      "fear_greed"
+    ]
   }
 ]
