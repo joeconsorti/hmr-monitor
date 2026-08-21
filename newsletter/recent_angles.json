@@ -35,5 +35,16 @@
       "gold",
       "fear_greed"
     ]
+  },
+  {
+    "date": "2026-08-21",
+    "headline": "Oil Is Falling While Gold Rips. That Combination Has A Name.",
+    "lead_label": "puell",
+    "chart_labels": [
+      "price_vs_levels",
+      "puell",
+      "sth_mvrv",
+      "move"
+    ]
   }
 ]
