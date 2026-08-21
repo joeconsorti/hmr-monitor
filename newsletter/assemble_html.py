@@ -21,6 +21,11 @@ from chart_select import MACRO_LABELS
 
 ORANGE = "#FD6F0B"
 
+# Gmail clips messages over ~102KB. Warn well before that so a bloated send
+# (e.g. someone accidentally sending with inline_base64=True, or a future
+# change that inflates the template) gets caught before it reaches inboxes.
+SIZE_WARN_BYTES = 90 * 1024
+
 
 def _img_tag(chart, inline_base64):
     if inline_base64:
@@ -83,7 +88,7 @@ def assemble(prose, charts, data, inline_base64=True):
             "</div>"
         )
 
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#0d1117;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
 <div style="max-width:640px;margin:0 auto;padding:28px 22px;background:#0d1117;color:#e6edf3;">
@@ -151,3 +156,10 @@ def assemble(prose, charts, data, inline_base64=True):
   </div>
 
 </div></body></html>"""
+
+    size = len(html.encode("utf-8"))
+    if not inline_base64 and size > SIZE_WARN_BYTES:
+        print(f"  !!! WARNING: assembled send HTML is {size/1024:.1f}KB, over the "
+              f"{SIZE_WARN_BYTES/1024:.0f}KB clipping-risk threshold -- Gmail clips "
+              f"around ~102KB. Inspect before sending.")
+    return html
