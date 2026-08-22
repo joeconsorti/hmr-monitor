@@ -46,5 +46,15 @@
       "sth_mvrv",
       "move"
     ]
+  },
+  {
+    "date": "2026-08-22",
+    "headline": "Miners Are Getting Squeezed And Still Not Capitulating",
+    "lead_label": "hash_ribbons",
+    "chart_labels": [
+      "price_vs_levels",
+      "hash_ribbons",
+      "gold"
+    ]
   }
 ]
